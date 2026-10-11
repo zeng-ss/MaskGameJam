@@ -413,7 +413,8 @@ namespace CSObjectWrapEditor
                         });
                         break;
                     case MemberTypes.Event:
-                        EventInfo ev = member as EventInfo;
+                        // 必须写全限定名：项目里 EventCenter.cs 有一个全局命名空间的 EventInfo，会遮蔽 System.Reflection.EventInfo
+                        System.Reflection.EventInfo ev = member as System.Reflection.EventInfo;
                         if (ev.GetAddMethod() == null && ev.GetRemoveMethod() == null) break;
                         bool eventIsStatic = ev.GetAddMethod() != null ? ev.GetAddMethod().IsStatic : ev.GetRemoveMethod().IsStatic;
                         lazyMemberInfos.Add(new LazyMemberInfo {

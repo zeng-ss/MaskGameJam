@@ -34,6 +34,8 @@ namespace XLua
 				translator.RegisterPushAndGetAndUpdate<UnityEngine.Ray>(translator.PushUnityEngineRay, translator.Get, translator.UpdateUnityEngineRay);
 				translator.RegisterPushAndGetAndUpdate<UnityEngine.Bounds>(translator.PushUnityEngineBounds, translator.Get, translator.UpdateUnityEngineBounds);
 				translator.RegisterPushAndGetAndUpdate<UnityEngine.Ray2D>(translator.PushUnityEngineRay2D, translator.Get, translator.UpdateUnityEngineRay2D);
+				translator.RegisterPushAndGetAndUpdate<UnityEngine.PrimitiveType>(translator.PushUnityEnginePrimitiveType, translator.Get, translator.UpdateUnityEnginePrimitiveType);
+				translator.RegisterPushAndGetAndUpdate<UnityEngine.EventSystems.EventTriggerType>(translator.PushUnityEngineEventSystemsEventTriggerType, translator.Get, translator.UpdateUnityEngineEventSystemsEventTriggerType);
 			
 			}
         }
@@ -570,6 +572,174 @@ namespace XLua
             }
         }
         
+        int UnityEnginePrimitiveType_TypeID = -1;
+		int UnityEnginePrimitiveType_EnumRef = -1;
+        
+        public void PushUnityEnginePrimitiveType(RealStatePtr L, UnityEngine.PrimitiveType val)
+        {
+            if (UnityEnginePrimitiveType_TypeID == -1)
+            {
+			    bool is_first;
+                UnityEnginePrimitiveType_TypeID = getTypeId(L, typeof(UnityEngine.PrimitiveType), out is_first);
+				
+				if (UnityEnginePrimitiveType_EnumRef == -1)
+				{
+				    Utils.LoadCSTable(L, typeof(UnityEngine.PrimitiveType));
+				    UnityEnginePrimitiveType_EnumRef = LuaAPI.luaL_ref(L, LuaIndexes.LUA_REGISTRYINDEX);
+				}
+				
+            }
+			
+			if (LuaAPI.xlua_tryget_cachedud(L, (int)val, UnityEnginePrimitiveType_EnumRef) == 1)
+            {
+			    return;
+			}
+			
+            IntPtr buff = LuaAPI.xlua_pushstruct(L, 4, UnityEnginePrimitiveType_TypeID);
+            if (!CopyByValue.Pack(buff, 0, (int)val))
+            {
+                throw new Exception("pack fail fail for UnityEngine.PrimitiveType ,value="+val);
+            }
+			
+			LuaAPI.lua_getref(L, UnityEnginePrimitiveType_EnumRef);
+			LuaAPI.lua_pushvalue(L, -2);
+			LuaAPI.xlua_rawseti(L, -2, (int)val);
+			LuaAPI.lua_pop(L, 1);
+			
+        }
+		
+        public void Get(RealStatePtr L, int index, out UnityEngine.PrimitiveType val)
+        {
+		    LuaTypes type = LuaAPI.lua_type(L, index);
+            if (type == LuaTypes.LUA_TUSERDATA )
+            {
+			    if (LuaAPI.xlua_gettypeid(L, index) != UnityEnginePrimitiveType_TypeID)
+				{
+				    throw new Exception("invalid userdata for UnityEngine.PrimitiveType");
+				}
+				
+                IntPtr buff = LuaAPI.lua_touserdata(L, index);
+				int e;
+                if (!CopyByValue.UnPack(buff, 0, out e))
+                {
+                    throw new Exception("unpack fail for UnityEngine.PrimitiveType");
+                }
+				val = (UnityEngine.PrimitiveType)e;
+                
+            }
+            else
+            {
+                val = (UnityEngine.PrimitiveType)objectCasters.GetCaster(typeof(UnityEngine.PrimitiveType))(L, index, null);
+            }
+        }
+		
+        public void UpdateUnityEnginePrimitiveType(RealStatePtr L, int index, UnityEngine.PrimitiveType val)
+        {
+		    
+            if (LuaAPI.lua_type(L, index) == LuaTypes.LUA_TUSERDATA)
+            {
+			    if (LuaAPI.xlua_gettypeid(L, index) != UnityEnginePrimitiveType_TypeID)
+				{
+				    throw new Exception("invalid userdata for UnityEngine.PrimitiveType");
+				}
+				
+                IntPtr buff = LuaAPI.lua_touserdata(L, index);
+                if (!CopyByValue.Pack(buff, 0,  (int)val))
+                {
+                    throw new Exception("pack fail for UnityEngine.PrimitiveType ,value="+val);
+                }
+            }
+			
+            else
+            {
+                throw new Exception("try to update a data with lua type:" + LuaAPI.lua_type(L, index));
+            }
+        }
+        
+        int UnityEngineEventSystemsEventTriggerType_TypeID = -1;
+		int UnityEngineEventSystemsEventTriggerType_EnumRef = -1;
+        
+        public void PushUnityEngineEventSystemsEventTriggerType(RealStatePtr L, UnityEngine.EventSystems.EventTriggerType val)
+        {
+            if (UnityEngineEventSystemsEventTriggerType_TypeID == -1)
+            {
+			    bool is_first;
+                UnityEngineEventSystemsEventTriggerType_TypeID = getTypeId(L, typeof(UnityEngine.EventSystems.EventTriggerType), out is_first);
+				
+				if (UnityEngineEventSystemsEventTriggerType_EnumRef == -1)
+				{
+				    Utils.LoadCSTable(L, typeof(UnityEngine.EventSystems.EventTriggerType));
+				    UnityEngineEventSystemsEventTriggerType_EnumRef = LuaAPI.luaL_ref(L, LuaIndexes.LUA_REGISTRYINDEX);
+				}
+				
+            }
+			
+			if (LuaAPI.xlua_tryget_cachedud(L, (int)val, UnityEngineEventSystemsEventTriggerType_EnumRef) == 1)
+            {
+			    return;
+			}
+			
+            IntPtr buff = LuaAPI.xlua_pushstruct(L, 4, UnityEngineEventSystemsEventTriggerType_TypeID);
+            if (!CopyByValue.Pack(buff, 0, (int)val))
+            {
+                throw new Exception("pack fail fail for UnityEngine.EventSystems.EventTriggerType ,value="+val);
+            }
+			
+			LuaAPI.lua_getref(L, UnityEngineEventSystemsEventTriggerType_EnumRef);
+			LuaAPI.lua_pushvalue(L, -2);
+			LuaAPI.xlua_rawseti(L, -2, (int)val);
+			LuaAPI.lua_pop(L, 1);
+			
+        }
+		
+        public void Get(RealStatePtr L, int index, out UnityEngine.EventSystems.EventTriggerType val)
+        {
+		    LuaTypes type = LuaAPI.lua_type(L, index);
+            if (type == LuaTypes.LUA_TUSERDATA )
+            {
+			    if (LuaAPI.xlua_gettypeid(L, index) != UnityEngineEventSystemsEventTriggerType_TypeID)
+				{
+				    throw new Exception("invalid userdata for UnityEngine.EventSystems.EventTriggerType");
+				}
+				
+                IntPtr buff = LuaAPI.lua_touserdata(L, index);
+				int e;
+                if (!CopyByValue.UnPack(buff, 0, out e))
+                {
+                    throw new Exception("unpack fail for UnityEngine.EventSystems.EventTriggerType");
+                }
+				val = (UnityEngine.EventSystems.EventTriggerType)e;
+                
+            }
+            else
+            {
+                val = (UnityEngine.EventSystems.EventTriggerType)objectCasters.GetCaster(typeof(UnityEngine.EventSystems.EventTriggerType))(L, index, null);
+            }
+        }
+		
+        public void UpdateUnityEngineEventSystemsEventTriggerType(RealStatePtr L, int index, UnityEngine.EventSystems.EventTriggerType val)
+        {
+		    
+            if (LuaAPI.lua_type(L, index) == LuaTypes.LUA_TUSERDATA)
+            {
+			    if (LuaAPI.xlua_gettypeid(L, index) != UnityEngineEventSystemsEventTriggerType_TypeID)
+				{
+				    throw new Exception("invalid userdata for UnityEngine.EventSystems.EventTriggerType");
+				}
+				
+                IntPtr buff = LuaAPI.lua_touserdata(L, index);
+                if (!CopyByValue.Pack(buff, 0,  (int)val))
+                {
+                    throw new Exception("pack fail for UnityEngine.EventSystems.EventTriggerType ,value="+val);
+                }
+            }
+			
+            else
+            {
+                throw new Exception("try to update a data with lua type:" + LuaAPI.lua_type(L, index));
+            }
+        }
+        
         
 		// table cast optimze
 		
@@ -629,6 +799,18 @@ namespace XLua
 				translator.PushUnityEngineRay2D(L, array[index]);
 				return true;
 			}
+			else if (type == typeof(UnityEngine.PrimitiveType[]))
+			{
+			    UnityEngine.PrimitiveType[] array = obj as UnityEngine.PrimitiveType[];
+				translator.PushUnityEnginePrimitiveType(L, array[index]);
+				return true;
+			}
+			else if (type == typeof(UnityEngine.EventSystems.EventTriggerType[]))
+			{
+			    UnityEngine.EventSystems.EventTriggerType[] array = obj as UnityEngine.EventSystems.EventTriggerType[];
+				translator.PushUnityEngineEventSystemsEventTriggerType(L, array[index]);
+				return true;
+			}
             return false;
 		}
 		
@@ -680,6 +862,18 @@ namespace XLua
 			else if (type == typeof(UnityEngine.Ray2D[]))
 			{
 			    UnityEngine.Ray2D[] array = obj as UnityEngine.Ray2D[];
+				translator.Get(L, obj_idx, out array[array_idx]);
+				return true;
+			}
+			else if (type == typeof(UnityEngine.PrimitiveType[]))
+			{
+			    UnityEngine.PrimitiveType[] array = obj as UnityEngine.PrimitiveType[];
+				translator.Get(L, obj_idx, out array[array_idx]);
+				return true;
+			}
+			else if (type == typeof(UnityEngine.EventSystems.EventTriggerType[]))
+			{
+			    UnityEngine.EventSystems.EventTriggerType[] array = obj as UnityEngine.EventSystems.EventTriggerType[];
 				translator.Get(L, obj_idx, out array[array_idx]);
 				return true;
 			}

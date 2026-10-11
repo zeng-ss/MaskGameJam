@@ -8,31 +8,31 @@ public class IEventInfo
     
 }
 
-public class EventInfo : IEventInfo
+public class GameEventInfo : IEventInfo
 {
     public UnityAction actions;
 
-    public EventInfo(UnityAction action)
+    public GameEventInfo(UnityAction action)
     {
         actions += action;
     }
 }
 
-public class EventInfo<T> : IEventInfo
+public class GameEventInfo<T> : IEventInfo
 {
     public UnityAction<T> actions;
 
-    public EventInfo(UnityAction<T> action)
+    public GameEventInfo(UnityAction<T> action)
     {
         actions += action;
     }
 }
 
-public class EventInfo<T,K> : IEventInfo
+public class GameEventInfo<T,K> : IEventInfo
 {
     public UnityAction<T,K> actions;
 
-    public EventInfo(UnityAction<T,K> action)
+    public GameEventInfo(UnityAction<T,K> action)
     {
         actions += action;
     }
@@ -53,11 +53,11 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo).actions += action;
+            (eventDict[eventName] as GameEventInfo).actions += action;
         }
         else
         {
-            eventDict.Add(eventName, new EventInfo(action));
+            eventDict.Add(eventName, new GameEventInfo(action));
         }
     }
 
@@ -65,11 +65,11 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T>).actions += action;
+            (eventDict[eventName] as GameEventInfo<T>).actions += action;
         }
         else
         {
-            eventDict.Add(eventName, new EventInfo<T>(action));
+            eventDict.Add(eventName, new GameEventInfo<T>(action));
         }
     }
     
@@ -77,11 +77,11 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T,K>).actions += action;
+            (eventDict[eventName] as GameEventInfo<T,K>).actions += action;
         }
         else
         {
-            eventDict.Add(eventName, new EventInfo<T,K>(action));
+            eventDict.Add(eventName, new GameEventInfo<T,K>(action));
         }
     }
 
@@ -94,7 +94,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo).actions -= action;
+            (eventDict[eventName] as GameEventInfo).actions -= action;
         }
     }
 
@@ -102,7 +102,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T,K>).actions -= action;
+            (eventDict[eventName] as GameEventInfo<T,K>).actions -= action;
         }
     }
     
@@ -110,7 +110,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T>).actions -= action;
+            (eventDict[eventName] as GameEventInfo<T>).actions -= action;
         }
     }
 /// <summary>
@@ -121,7 +121,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo).actions?.Invoke();  
+            (eventDict[eventName] as GameEventInfo).actions?.Invoke();  
         }
         
     }
@@ -129,7 +129,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T>).actions?.Invoke(info);
+            (eventDict[eventName] as GameEventInfo<T>).actions?.Invoke(info);
         }
         
     }
@@ -138,7 +138,7 @@ public class EventCenter : SingleTon<EventCenter>
     {
         if (eventDict.ContainsKey(eventName))
         {
-            (eventDict[eventName] as EventInfo<T,K>).actions?.Invoke(v1,v2);
+            (eventDict[eventName] as GameEventInfo<T,K>).actions?.Invoke(v1,v2);
         }
     }
     

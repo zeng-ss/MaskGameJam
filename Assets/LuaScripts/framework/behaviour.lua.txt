@@ -1,0 +1,39 @@
+-- Lua 组件基类
+-- C# 侧 LuaBehaviour 会把生命周期转发过来，这里负责分发到实例方法
+--
+-- 模块标准写法：
+--   local behaviour = require 'framework.behaviour'
+--   local MyPanel = {}
+--   function MyPanel:awake() end
+--   function MyPanel:start() end
+--   return function(cs) return behaviour.new(cs, MyPanel) end
+--
+-- 实例里 self.cs 就是 C# 组件本体，序列化字段用 self.cs.xxx 访问
+
+local M = {}
+
+-- 会被转发给 C# 的生命周期（名字必须和 LuaBehaviour 里取的一致，全小写）
+local LIFECYCLE = {
+    "awake", "start", "update", "lateupdate", "fixedupdate",
+    "onenable", "ondisable", "ondestroy",
+}
+
+--- 创建一个 Lua 组件实例
+--- @param cs  C# 侧 LuaBehaviour 组件本体
+--- @param cls 具体模块的类表，成员方法用 ":" 定义
+--- @return table 生命周期闭包表（C# 侧取的是无参函数，所以这里把 self 提前绑死）
+function M.new(cs, cls)
+    local o = { cs = cs }
+    setmetatable(o, { __index = cls })
+
+    local handlers = {}
+    for _, name in ipairs(LIFECYCLE) do
+        handlers[name] = function()
+            local fn = cls[name]
+            if fn then fn(o) end
+        end
+    end
+    return handlers
+end
+
+return M

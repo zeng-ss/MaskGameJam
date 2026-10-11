@@ -92,16 +92,16 @@ public static class Build
     // Addressables 标签，运行时用它整组下载
     private const string LuaLabel = "Lua";
 
-    // 脚本地址前缀，与 XLuaManager 中的 LuaAddressPrefix 保持一致
-    private const string LuaAddressPrefix = "lua/";
-
-    // .lua.txt 去掉 .txt 后缀后的长度
+    // 脚本地址后缀：Assets/LuaScripts/main.lua.txt -> 地址 main.lua
     private const string TxtSuffix = ".txt";
 
     /// <summary>
     /// 把 Assets/LuaScripts 下的 Lua 脚本注册进 Addressables 的 "Lua" 分组
-    /// 地址规则：Assets/LuaScripts/main.lua.txt -> lua/main.lua
-    ///           Assets/LuaScripts/demo/greet.lua.txt -> lua/demo/greet.lua
+    /// 地址规则（只用文件名，不带目录）：
+    ///     Assets/LuaScripts/main.lua.txt              -> main.lua
+    ///     Assets/LuaScripts/demo/greet.lua.txt        -> greet.lua
+    ///     Assets/LuaScripts/ui/start_panel.lua.txt    -> start_panel.lua
+    /// 所以 Lua 里直接 require 'greet' / require 'start_panel' 即可，不用写目录。
     /// 每次改完 Lua 都要执行（打更新包时会自动执行一次）
     /// </summary>
     [MenuItem("Build/PrepareLuaAssets")]
@@ -139,9 +139,10 @@ public static class Build
             string path = AssetDatabase.GUIDToAssetPath(guid);
             if (!path.EndsWith(".lua.txt")) continue;
 
-            // Assets/LuaScripts/demo/greet.lua.txt -> demo/greet.lua
-            string relative = path.Substring(LuaScriptsDir.Length + 1);
-            string address = LuaAddressPrefix + relative.Substring(0, relative.Length - TxtSuffix.Length);
+            // 地址 = 文件名去掉 .txt，例如：
+            //   Assets/LuaScripts/demo/greet.lua.txt -> greet.lua
+            string fileName = Path.GetFileName(path);
+            string address = fileName.Substring(0, fileName.Length - TxtSuffix.Length);
 
             AddressableAssetEntry entry = settings.CreateOrMoveEntry(guid, luaGroup);
             if (entry == null)
@@ -178,7 +179,8 @@ public static class Build
         settings.GetAllAssets(entries, false);
         foreach (AddressableAssetEntry entry in entries)
         {
-            if (entry.address.StartsWith(LuaAddressPrefix))
+            // 地址现在只是文件名（main.lua / greet.lua），没法按前缀认，改用 label 判断
+            if (entry.labels.Contains(LuaLabel))
                 Debug.Log($"{entry.address}  ->  {entry.AssetPath}");
         }
     }

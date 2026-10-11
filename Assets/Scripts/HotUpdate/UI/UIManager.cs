@@ -52,6 +52,19 @@ public class UIManager : UnitySingleTonMono<UIManager>
     // 唯一的openPanel方法
     public void openPanel<T>(Action<T> onLoadComplete = null, bool needPostProcessing = false) where T : BasePanel
     {
+        OpenPanelInternal(typeof(T).Name, p => onLoadComplete?.Invoke(p as T), needPostProcessing);
+    }
+
+    /// <summary>
+    /// 供 Lua 调用的非泛型版本（xLua 无法直接调用 C# 泛型方法）
+    /// </summary>
+    public void openPanelByName(string panelName, Action<MonoBehaviour> onLoadComplete = null, bool needPostProcessing = false)
+    {
+        OpenPanelInternal(panelName, onLoadComplete, needPostProcessing);
+    }
+
+    private void OpenPanelInternal(string panelName, Action<MonoBehaviour> onLoadComplete, bool needPostProcessing)
+    {
         if (!isCanvasInitialized)
         {
             Debug.LogError("Canvas未初始化完成，无法打开面板！");
@@ -60,12 +73,11 @@ public class UIManager : UnitySingleTonMono<UIManager>
         }
 
         UpdateCameraReferences();
-        string panelName = typeof(T).Name;
 
         // 面板已存在：恢复原始Transform+修复资源
         if (UIPanelDict.ContainsKey(panelName))
         {
-            T panel = UIPanelDict[panelName] as T;
+            BasePanel panel = UIPanelDict[panelName];
             // 1. 恢复预制体原始Transform（核心：解决宽高为0）
             if (panelOriginalTransformData.ContainsKey(panelName))
             {
@@ -101,14 +113,14 @@ public class UIManager : UnitySingleTonMono<UIManager>
 
         AsyncOperationHandle<GameObject> loadHandle = Addressables.LoadAssetAsync<GameObject>(panelName);
         panelLoadHandles.Add(panelName, loadHandle);
-        StartCoroutine(FinishLoadPanelCoroutine<T>(loadHandle, panelName, needPostProcessing, onLoadComplete));
+        StartCoroutine(FinishLoadPanelCoroutine(loadHandle, panelName, needPostProcessing, onLoadComplete));
     }
 
     /// <summary>
     /// 加载面板协程（保存原始Transform+不释放资源）
     /// </summary>
-    private IEnumerator FinishLoadPanelCoroutine<T>(AsyncOperationHandle<GameObject> loadHandle, string panelName, 
-        bool needPostProcessing, Action<T> onLoadComplete = null) where T : BasePanel
+    private IEnumerator FinishLoadPanelCoroutine(AsyncOperationHandle<GameObject> loadHandle, string panelName, 
+        bool needPostProcessing, Action<MonoBehaviour> onLoadComplete = null)
     {
         yield return loadHandle;
         panelLoadHandles.Remove(panelName);
@@ -148,7 +160,7 @@ public class UIManager : UnitySingleTonMono<UIManager>
         FixSpriteInPanel(panelObj);
 
         // 5. 获取面板组件
-        BasePanel panel = panelObj.GetComponent<T>();
+        BasePanel panel = panelObj.GetComponent<BasePanel>();
         if (panel == null)
         {
             Debug.LogError($"面板 {panelName} 缺少BasePanel组件");
@@ -169,7 +181,7 @@ public class UIManager : UnitySingleTonMono<UIManager>
         }
 
         // 8. 执行回调
-        onLoadComplete?.Invoke(panel as T);
+        onLoadComplete?.Invoke(panel);
     }
 
     /// <summary>
@@ -253,7 +265,14 @@ public class UIManager : UnitySingleTonMono<UIManager>
     /// </summary>
     public void closePanel<T>()
     {
-        string panelName = typeof(T).Name;
+        closePanelByName(typeof(T).Name);
+    }
+
+    /// <summary>
+    /// 供 Lua 调用的关闭面板（非泛型版本）
+    /// </summary>
+    public void closePanelByName(string panelName)
+    {
         if (UIPanelDict.ContainsKey(panelName))
         {
             BasePanel panel = UIPanelDict[panelName];
@@ -278,7 +297,14 @@ public class UIManager : UnitySingleTonMono<UIManager>
     /// </summary>
     public void DestroyPanel<T>()
     {
-        string panelName = typeof(T).Name;
+        DestroyPanelByName(typeof(T).Name);
+    }
+
+    /// <summary>
+    /// 供 Lua 调用的销毁面板（非泛型版本）
+    /// </summary>
+    public void DestroyPanelByName(string panelName)
+    {
         if (UIPanelDict.ContainsKey(panelName))
         {
             // 1. 销毁面板对象
@@ -399,8 +425,15 @@ public class UIManager : UnitySingleTonMono<UIManager>
 
     public T getPanel<T>() where T : BasePanel
     {
-        string panelName = typeof(T).Name;
-        return UIPanelDict.ContainsKey(panelName) ? UIPanelDict[panelName] as T : null;
+        return getPanelByName(typeof(T).Name) as T;
+    }
+
+    /// <summary>
+    /// 供 Lua 调用的取面板（非泛型版本）
+    /// </summary>
+    public BasePanel getPanelByName(string panelName)
+    {
+        return UIPanelDict.ContainsKey(panelName) ? UIPanelDict[panelName] : null;
     }
 
     public void ForceOverlayMode() { postProcessingPanels.Clear(); StartCoroutine(DelaySetCanvasMode(false, 0.1f)); }

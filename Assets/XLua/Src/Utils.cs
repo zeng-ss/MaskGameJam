@@ -1438,8 +1438,37 @@ namespace XLua
             return lastPos < 0 || delegateParams[lastPos].IsDefined(typeof(ParamArrayAttribute), false) == bridgeParams[lastPos].IsDefined(typeof(ParamArrayAttribute), false);
 		}
 
+		// Unity 6 给不少类型加了 Span<T> / ReadOnlySpan<T> 参数的重载（Vector2、Vector3、Transform、AudioClip 等）。
+		// Span<T> 是 ref struct，不能作为泛型类型参数，生成 wrap 会直接报 CS0306，所以这类方法一律跳过。
+		private static bool IsSupportedType(Type type)
+		{
+			if (type == null) return false;
+			if (type.IsByRef || type.IsPointer)
+			{
+				var elementType = type.GetElementType();
+				return elementType == null ? false : IsSupportedType(elementType);
+			}
+			if (type.IsByRefLike) return false;
+			if (type.IsGenericType)
+			{
+				var args = type.GetGenericArguments();
+				for (var i = 0; i < args.Length; i++)
+				{
+					if (!IsSupportedType(args[i])) return false;
+				}
+			}
+			return true;
+		}
+
 		public static bool IsSupportedMethod(MethodInfo method)
 		{
+			if (!IsSupportedType(method.ReturnType)) return false;
+			var checkParameters = method.GetParameters();
+			for (var i = 0; i < checkParameters.Length; i++)
+			{
+				if (!IsSupportedType(checkParameters[i].ParameterType)) return false;
+			}
+
 			if (!method.ContainsGenericParameters)
 				return true;
 			var methodParameters = method.GetParameters();

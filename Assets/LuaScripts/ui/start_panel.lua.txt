@@ -1,0 +1,117 @@
+-- 开始面板逻辑（对应 C# Assets/Scripts/HotUpdate/UI/StartPanel.cs）
+-- 序列化字段通过 self.cs.xxx 访问
+
+local behaviour = require 'framework.behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Application = UnityEngine.Application
+local Mathf = UnityEngine.Mathf
+local Time = UnityEngine.Time
+
+local StartPanel = {}
+
+-- 播放按钮音效
+function StartPanel:playClickSound()
+    local pool = CS.SoundAudioPool.Instance
+    if pool ~= nil then
+        pool:PlaySound(pool.btnSeletClip, self.cs.transform.position)
+    end
+end
+
+-- 播放悬停音效
+function StartPanel:playHoverSound()
+    local pool = CS.SoundAudioPool.Instance
+    if pool ~= nil then
+        pool:PlaySound(pool.hoverClip, self.cs.transform.position)
+    end
+end
+
+-- 给按钮挂悬停事件（EventTrigger）
+function StartPanel:addHoverToButton(button)
+    if button == nil then return end
+
+    local trigger = button.gameObject:GetComponent(typeof(CS.UnityEngine.EventSystems.EventTrigger))
+    if trigger == nil then
+        trigger = button.gameObject:AddComponent(typeof(CS.UnityEngine.EventSystems.EventTrigger))
+    end
+
+    local entry = CS.UnityEngine.EventSystems.EventTrigger.Entry()
+    entry.eventID = CS.UnityEngine.EventSystems.EventTriggerType.PointerEnter
+    entry.callback:AddListener(function(data)
+        self:playHoverSound()
+    end)
+    trigger.triggers:Add(entry)
+end
+
+-- 开始按钮：弹出提示面板
+function StartPanel:onStartClick()
+    self:playClickSound()
+
+    CS.UIManager.Instance:openPanelByName("TipPanel", function(panel)
+        -- panel 是 C# 的 BasePanel，反查它的 Lua 实例再调用 Lua 方法
+        local luaPanel = CS.LuaBinding.GetLuaInstance(panel)
+        if luaPanel ~= nil and luaPanel.ShowTip ~= nil then
+            luaPanel:ShowTip("敬请期待....")
+        else
+            UnityEngine.Debug.LogWarning("[lua] TipPanel 的 Lua 实例不可用，请确认 TipPanel 已迁移到 Lua")
+        end
+    end)
+end
+
+-- 无尽模式按钮：切场景
+function StartPanel:onEndlessClick()
+    self:playClickSound()
+
+    CS.SceneMgr.Instance:LoadSceneAsync("EndlessScene", function()
+        CS.UIManager.Instance:closePanelByName("StartPanel")
+        CS.UIManager.Instance:openPanelByName("PlayerProPanel")
+    end)
+end
+
+-- 退出按钮
+function StartPanel:onExitClick()
+    self:playClickSound()
+
+    if Application.isEditor then
+        -- 编辑器下停掉播放模式；UnityEditor 命名空间在运行时不存在，用 pcall 兜住
+        pcall(function()
+            CS.UnityEditor.EditorApplication.isPlaying = false
+        end)
+    else
+        Application:Quit()
+    end
+end
+
+function StartPanel:onenable()
+    local cs = self.cs
+    if cs.startBtn ~= nil then cs.startBtn.onClick:AddListener(function() self:onStartClick() end) end
+    if cs.endlessBtn ~= nil then cs.endlessBtn.onClick:AddListener(function() self:onEndlessClick() end) end
+    if cs.exitBtn ~= nil then cs.exitBtn.onClick:AddListener(function() self:onExitClick() end) end
+
+    self:addHoverToButton(cs.startBtn)
+    self:addHoverToButton(cs.endlessBtn)
+    self:addHoverToButton(cs.exitBtn)
+end
+
+-- 标题文字呼吸效果
+function StartPanel:update()
+    self._timer = (self._timer or 0) + Time.deltaTime * 2
+    local t = (Mathf.Sin(self._timer) + 1) * 0.5
+    local size = Mathf.Lerp(10, 50, t)
+
+    local cs = self.cs
+    if cs.startText ~= nil then cs.startText.fontSize = size end
+    if cs.endlessText ~= nil then cs.endlessText.fontSize = size end
+    if cs.exitText ~= nil then cs.exitText.fontSize = size end
+end
+
+function StartPanel:ondisable()
+    local cs = self.cs
+    if cs.startBtn ~= nil then cs.startBtn.onClick:RemoveAllListeners() end
+    if cs.endlessBtn ~= nil then cs.endlessBtn.onClick:RemoveAllListeners() end
+    if cs.exitBtn ~= nil then cs.exitBtn.onClick:RemoveAllListeners() end
+end
+
+return function(cs)
+    return behaviour.new(cs, StartPanel)
+end

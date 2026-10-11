@@ -568,7 +568,8 @@ namespace XLua
                 else if(member.MemberType == MemberTypes.Event)
                 {
                     
-                    EventInfo event_info = member as EventInfo;
+                    // 全限定名：项目里 EventCenter.cs 有全局命名空间的 EventInfo，会遮蔽 System.Reflection.EventInfo
+                    System.Reflection.EventInfo event_info = member as System.Reflection.EventInfo;
                     EventBuilder event_builder = impl_type_builder.DefineEvent(event_info.Name, event_info.Attributes, event_info.EventHandlerType);
                     if (event_info.GetAddMethod() != null)
                     {
@@ -1451,7 +1452,7 @@ namespace XLua
             return wrapTypeBuilder.CreateType();
         }
 
-        MethodBuilder emitEventWrap(TypeBuilder typeBuilder, EventInfo ev)
+        MethodBuilder emitEventWrap(TypeBuilder typeBuilder, System.Reflection.EventInfo ev)
         {
             var addEvent = ev.GetAddMethod();
             var removeEvent = ev.GetRemoveMethod();
