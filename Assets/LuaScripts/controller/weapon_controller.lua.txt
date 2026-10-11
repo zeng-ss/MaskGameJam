@@ -1,0 +1,64 @@
+-- 武器碰撞检测：技能动画期间持续碰玩家 → 出血特效 + 扣血
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/WeaponController.cs
+--
+-- 原 C# 用协程等粒子播完再回收出血特效，这里改成 LuaTween.Delay 延时回调
+-- （粒子时长通过 LuaUtil.ParticleDuration 取，Lua 侧拿不到 MainModule）。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+local GameManager = CS.GameManager
+local LuaBinding = CS.LuaBinding
+local LuaUtil = CS.LuaUtil
+local Tween = CS.LuaTween
+
+local WeaponController = {}
+
+local BLOOD_POOL = "HitPlayerBlood"
+local PLAYER_TAG = "Player"
+
+function WeaponController:awake()
+    self.isFirstStay = true
+end
+
+function WeaponController:start_attack_hit()
+    self.cs.collider.enabled = true
+    self.isFirstStay = true
+end
+
+function WeaponController:stop_attack_hit()
+    self.cs.collider.enabled = false
+    self.isFirstStay = false
+end
+
+function WeaponController:ontriggerstay(other)
+    if not other:CompareTag(PLAYER_TAG) then return end
+
+    local player = other.gameObject:GetComponent(typeof(CS.PlayerStats))
+    if player == nil or not self.isFirstStay then return end
+
+    self.isFirstStay = false
+
+    local cs = self.cs
+    local blood = PoolMgr.Instance:GetObj(BLOOD_POOL)
+    blood.transform.position = other:ClosestPoint(cs.transform.position)
+
+    local damage = GameManager.Instance:GetEnemyDamage(cs.curEnemyName)
+    local pool = SoundAudioPool.Instance
+    pool:PlaySound(pool.hitPlayerClip, cs.transform.position)
+    player:TakeDamage(damage)
+
+    -- 等粒子播完再回收（原来由协程负责）
+    local duration = LuaUtil.ParticleDuration(blood)
+    Tween.Delay(duration, function()
+        if LuaBinding.IsAlive(blood) then
+            PoolMgr.Instance:PushObj(BLOOD_POOL, blood)
+        end
+    end)
+end
+
+return function(cs)
+    return behaviour.new(cs, WeaponController)
+end

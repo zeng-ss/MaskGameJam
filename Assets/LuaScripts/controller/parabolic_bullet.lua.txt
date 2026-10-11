@@ -1,0 +1,151 @@
+-- 抛物线炮弹：从面具位置沿抛物线飞向玩家，落点爆炸判定
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/ParabolicBullet.cs
+--
+-- ⚠️ 过渡说明：PlayerStats 目前仍是 C#（第三批迁移），先按 C# 方式访问。
+--    原 C# 用 Invoke(nameof(SetTargetPoint), 0.01f) 延迟一帧取玩家位置，
+--    这里改成「收到 init_bullet 后，下一帧 update 处理」。
+--    跨帧缓存了玩家引用，所以每帧用之前都要 IsAlive 校验（被销毁的 userdata 不是 nil）。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Mathf = UnityEngine.Mathf
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+local GameManager = CS.GameManager
+local LuaBinding = CS.LuaBinding
+
+local ParabolicBullet = {}
+
+local EXPLO_POOL = "Explo"
+local RED_WARN_POOL = "RedWarn"
+local BULLET_POOL = "ParabolicBullet"
+local MASK_KEY = "Mask"
+local TARGET_HEIGHT = -0.8
+local EXPLODE_RADIUS = 1.7
+
+function ParabolicBullet:start()
+    self.decreaseHealth = GameManager.Instance:GetEnemyDamage(MASK_KEY)
+    self:resolve_player()
+end
+
+function ParabolicBullet:resolve_player()
+    -- 原 C# 用 GetObjectByTag<PlayerStats>（泛型，Lua 调不了）→ 取 GameObject 再 GetComponent
+    local go = CS.SceneObjectManager.Instance:GetObjectByTag("Player")
+    self.player = (go ~= nil) and go:GetComponent(typeof(CS.PlayerStats)) or nil
+end
+
+-- 由 MaskController 调用（或 C# 壳 InitBullet 转发）
+function ParabolicBullet:init_bullet(spawnPos)
+    self.progress = 0
+    self.isInit = false
+    self.startPoint = spawnPos
+    self.targetPoint = Vector3.zero
+    self.needSetTarget = true -- 下一帧去取玩家位置
+end
+
+function ParabolicBullet:update()
+    if self.needSetTarget then
+        self.needSetTarget = false
+        self:set_target_point()
+    end
+    self:move_to_target()
+end
+
+function ParabolicBullet:set_target_point()
+    local player = self.player
+    if player ~= nil and LuaBinding.IsAlive(player) then
+        self.targetPoint = player.transform.position
+        self.targetPoint.y = TARGET_HEIGHT
+
+        self.redWarnTip = PoolMgr.Instance:GetObj(RED_WARN_POOL)
+        if self.redWarnTip ~= nil then
+            self.redWarnTip.transform.position = self.targetPoint
+        end
+        self.isInit = true
+    else
+        -- 无玩家则直接回收
+        self:recycle_self()
+    end
+end
+
+function ParabolicBullet:move_to_target()
+    local player = self.player
+    if not self.isInit or player == nil or not LuaBinding.IsAlive(player) then return end
+
+    local distance = Vector3.Distance(self.startPoint, self.targetPoint)
+    if distance < 0.1 then
+        self:recycle_self()
+        return
+    end
+
+    -- 进度按「距离 + 速度」推进，保证不同距离飞行速度一致
+    local step = self.cs.moveSpeed * Time.deltaTime / distance
+    self.progress = Mathf.Clamp01(self.progress + step)
+
+    -- 标准抛物线：y = h * 4t(1-t)
+    local t = self.progress
+    local currentHeight = self.cs.height * 4 * t * (1 - t)
+    local horizontalPos = Vector3.Lerp(
+        Vector3(self.startPoint.x, 0, self.startPoint.z),
+        Vector3(self.targetPoint.x, 0, self.targetPoint.z), t)
+    self.cs.transform.position = Vector3(horizontalPos.x, self.startPoint.y + currentHeight, horizontalPos.z)
+
+    -- 朝向飞行方向
+    local t2 = Mathf.Clamp01(t + 0.05)
+    local nextPos = Vector3.Lerp(self.startPoint, self.targetPoint, t2)
+    nextPos.y = self.startPoint.y + self.cs.height * 4 * t2 * (1 - t2)
+    self.cs.transform:LookAt(nextPos)
+
+    if self.progress >= 1 then
+        self:explode()
+        self:recycle_self()
+    end
+end
+
+function ParabolicBullet:explode()
+    local player = self.player
+    if self.redWarnTip == nil or not LuaBinding.IsAlive(self.redWarnTip) then return end
+    if player == nil or not LuaBinding.IsAlive(player) then return end
+
+    local warnPos = self.redWarnTip.transform.position
+    local pool = SoundAudioPool.Instance
+    pool:PlaySound(pool.parabolicExploClip, warnPos, 0.3)
+
+    local explo = PoolMgr.Instance:GetObj(EXPLO_POOL)
+    if explo ~= nil then
+        explo.transform.position = warnPos
+    end
+
+    local distance = Vector3.Distance(warnPos, player.transform.position)
+    if distance <= EXPLODE_RADIUS then
+        pool:PlaySound(pool.hitPlayerClip, self.cs.transform.position)
+        player:TakeDamage(self.decreaseHealth)
+    end
+end
+
+function ParabolicBullet:recycle_self()
+    self.isInit = false
+
+    local warn = self.redWarnTip
+    if warn ~= nil and LuaBinding.IsAlive(warn) then
+        PoolMgr.Instance:PushObj(RED_WARN_POOL, warn)
+    end
+    self.redWarnTip = nil
+
+    PoolMgr.Instance:PushObj(BULLET_POOL, self.cs.gameObject)
+end
+
+function ParabolicBullet:ondisable()
+    self.progress = 0
+    self.isInit = false
+    self.needSetTarget = false
+    self.startPoint = Vector3.zero
+    self.targetPoint = Vector3.zero
+end
+
+return function(cs)
+    return behaviour.new(cs, ParabolicBullet)
+end

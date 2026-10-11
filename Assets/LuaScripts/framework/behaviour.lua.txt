@@ -2,7 +2,7 @@
 -- C# 侧 LuaBehaviour 会把生命周期转发过来，这里负责分发到实例方法
 --
 -- 模块标准写法：
---   local behaviour = require 'framework.behaviour'
+--   local behaviour = require 'behaviour'   （地址即文件名，不带目录）
 --   local MyPanel = {}
 --   function MyPanel:awake() end
 --   function MyPanel:start() end
@@ -12,10 +12,12 @@
 
 local M = {}
 
--- 会被转发给 C# 的生命周期（名字必须和 LuaBehaviour 里取的一致，全小写）
+-- 会被转发给 C# 的生命周期（名字必须和 LuaBehaviour / LuaPanel 里取的一致，全小写）
+-- show / hide 只对面板有效（LuaPanel 转发 BasePanel.Show / Hide），普通组件写了不会被调用
 local LIFECYCLE = {
     "awake", "start", "update", "lateupdate", "fixedupdate",
     "onenable", "ondisable", "ondestroy",
+    "show", "hide",
 }
 
 --- 创建一个 Lua 组件实例

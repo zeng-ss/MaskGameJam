@@ -1,0 +1,19 @@
+-- 开始场景入口：打开开始面板
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/StartSceneController.cs
+--
+-- 注意：UIManager.openPanel<T> 是泛型方法，Lua 调不了，
+-- 所以走框架预留的非泛型版本 openPanelByName("面板类名")。
+
+local behaviour = require 'behaviour'
+
+local UIManager = CS.UIManager
+
+local StartSceneController = {}
+
+function StartSceneController:awake()
+    UIManager.Instance:openPanelByName("StartPanel")
+end
+
+return function(cs)
+    return behaviour.new(cs, StartSceneController)
+end

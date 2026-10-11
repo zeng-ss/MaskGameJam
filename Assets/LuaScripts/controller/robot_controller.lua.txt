@@ -1,0 +1,151 @@
+-- 机器人敌人：朝玩家转向 + 定时发射子弹 + 死亡弹跳表现
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/RobotController.cs
+--
+-- ⚠️ 过渡说明：GameManager 的敌人数值走扁平接口；EnemyBulletController 已迁 Lua，
+--    这里通过 LuaBinding.CallLua 跨语言调用它的 init。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Quaternion = UnityEngine.Quaternion
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+local GameManager = CS.GameManager
+local LuaBinding = CS.LuaBinding
+local Tween = CS.LuaTween
+
+local RobotController = {}
+
+local SINGLE_BULLET = "SingleBullet"
+local MULTI_BULLET = "MultiBullet"
+local EXPLO_POOL = "Explo"
+local GRAVITY = -9.8
+
+function RobotController:awake()
+    self.characterController = self.cs:GetComponent(typeof(CS.UnityEngine.CharacterController))
+    self.volecity = Vector3.zero
+    self.bulletCooldownTimer = 0
+end
+
+function RobotController:start()
+    self:resolve_player()
+end
+
+function RobotController:resolve_player()
+    -- SceneObjectManager 内部有缓存 + 有效性校验
+    self.player = CS.SceneObjectManager.Instance:GetObjectByTag("Player")
+end
+
+function RobotController:onenable()
+    local cs = self.cs
+    local enemyName = cs.gameObject.name
+
+    if not GameManager.Instance:HasEnemyConfig(enemyName) then
+        self.dataValid = false
+        return
+    end
+
+    self.dataValid = true
+    self.hitBlood = GameManager.Instance:GetEnemyDamage(enemyName)
+    self.currentHealth = GameManager.Instance:GetEnemyHealth(enemyName)
+
+    self.characterController.enabled = true
+    cs.sphereCollider.enabled = true
+    cs.transform.localScale = Vector3.one
+    self.volecity = Vector3.zero
+end
+
+function RobotController:update()
+    if not self.dataValid then return end
+
+    local cs = self.cs
+    local cc = self.characterController
+
+    if cc.enabled then
+        cc:Move(self.volecity * Time.deltaTime)
+        if cc.isGrounded then
+            self.volecity.y = -2
+        else
+            self.volecity.y = self.volecity.y + GRAVITY * Time.deltaTime
+        end
+    end
+
+    -- 玩家引用要每帧校验（被销毁的 userdata 不是 nil）
+    local player = self.player
+    if player == nil or not LuaBinding.IsAlive(player) then
+        self:resolve_player()
+        player = self.player
+        if player == nil then return end
+    end
+
+    local direction = player.transform.position - cs.transform.position
+    direction.y = 0
+    cs.transform.rotation = Quaternion.LookRotation(-direction)
+
+    self:shot_bullet()
+end
+
+function RobotController:shot_bullet()
+    local cs = self.cs
+    local player = self.player
+    if player == nil or not LuaBinding.IsAlive(player) then return end
+
+    self.bulletCooldownTimer = self.bulletCooldownTimer + Time.deltaTime
+
+    local RobotType = CS.RobotController.RobotType
+    local bulletType, cooldown, fireClip, volume
+    if cs.robotType == RobotType.Single then
+        bulletType, cooldown, volume = SINGLE_BULLET, 2, 0.2
+        fireClip = SoundAudioPool.Instance.singleFireClip
+    elseif cs.robotType == RobotType.Multi then
+        bulletType, cooldown, volume = MULTI_BULLET, 0.6, 0.4
+        fireClip = SoundAudioPool.Instance.multiFireClip
+    else
+        return
+    end
+
+    if self.bulletCooldownTimer < cooldown then return end
+
+    local obj = PoolMgr.Instance:GetObj(bulletType)
+    if obj == nil then return end
+
+    SoundAudioPool.Instance:PlaySound(fireClip, cs.transform.position, volume)
+    obj.transform.position = cs.fireEffect.transform.position
+    obj.transform.forward = -cs.transform.forward
+
+    -- 子弹逻辑在 Lua，转发初始化
+    LuaBinding.CallLua(obj:GetComponent(typeof(CS.EnemyBulletController)), "init", bulletType, self.hitBlood)
+
+    self.bulletCooldownTimer = 0
+end
+
+function RobotController:decrease_health(amount)
+    self.currentHealth = (self.currentHealth or 0) - amount
+    if self.currentHealth > 0 then return end
+
+    local cs = self.cs
+    cs.sphereCollider.enabled = false
+    self.characterController.enabled = false
+
+    -- 死亡爆炸
+    local explo = PoolMgr.Instance:GetObj(EXPLO_POOL)
+    if explo ~= nil then
+        explo.transform.position = cs.transform.position
+    end
+    SoundAudioPool.Instance:PlaySound(SoundAudioPool.Instance.robotExploClip, cs.transform.position)
+
+    -- 缩放抖动 + 旋转 + 上抛，最后缩小消失，再回收（原 C# 的 DOTween Sequence）
+    local poolName = cs.gameObject.name
+    Tween.DeathBounce(cs.transform, function()
+        PoolMgr.Instance:PushObj(poolName, cs.gameObject)
+        if explo ~= nil and LuaBinding.IsAlive(explo) then
+            PoolMgr.Instance:PushObj(EXPLO_POOL, explo)
+        end
+    end)
+end
+
+return function(cs)
+    return behaviour.new(cs, RobotController)
+end

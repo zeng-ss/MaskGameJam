@@ -1,56 +1,25 @@
-using System.Collections;
-using UnityEngine;
+﻿using UnityEngine;
 
-
-public class WeaponController : MonoBehaviour
+/// <summary>
+/// 武器碰撞检测 —— 逻辑全部在 Lua：Assets/LuaScripts/controller/weapon_controller.lua.txt
+///
+/// OnTriggerStay 是 Unity 的物理回调，由子类转发（LuaBehaviour 只转发生命周期消息）。
+/// StartAttackHit / StopAttackHit 由动画事件调用，方法名必须保留。
+/// </summary>
+public class WeaponController : LuaBehaviour
 {
     public string curEnemyName; // 当前武器持有者的名字
-    private string HitPlayerBloodPoolName = "HitPlayerBlood";
-    [Header("武器碰撞器")] [SerializeField] private new Collider collider;
-    private bool isFirstStay = true;
-    
-    // 武器 技能释放开始事件函数
-    public void StartAttackHit()
-    {
-        //打开碰撞器开始检测
-        collider.enabled = true;
-        isFirstStay = true;
-    }
-    // 武器 技能释放结束事件函数
-    public void StopAttackHit()
-    {
-        collider.enabled = false;
-        isFirstStay = false;
-    }
-    
-    /// <summary>
-    /// 检测武器和敌人之间的碰撞
-    /// </summary>
-    /// <param name="other"></param>
-    private void OnTriggerStay(Collider other)//持续检测碰撞效果
-    {
-        //检测当前武器所能
-        if (other.CompareTag("Player"))
-        {
-            PlayerStats player =  other.gameObject.GetComponent<PlayerStats>();//拿到被攻击的对象
-            if (player != null && isFirstStay)
-            {
-                isFirstStay = false;
-                GameObject blood = PoolMgr.Instance.GetObj(HitPlayerBloodPoolName);
-                blood.transform.position = other.ClosestPoint(transform.position);
-                float decreaseHealth = GameManager.Instance.RuntimeEnemyConfigDict[curEnemyName].damage;
-                SoundAudioPool.Instance.PlaySound(SoundAudioPool.Instance.hitPlayerClip,transform.position);
-                player.TakeDamage(decreaseHealth);
-                // 玩家扣血
-                StartCoroutine(PushBlood(blood));
-            }
-        }
-    }
 
-    private IEnumerator PushBlood(GameObject blood)
-    {
-        yield return new WaitForSeconds(blood.GetComponent<ParticleSystem>().main.duration);
-        PoolMgr.Instance.PushObj(HitPlayerBloodPoolName,blood);
-    }
-    
+    [Header("武器碰撞器")] public new Collider collider;
+
+    protected override string DefaultLuaModule => "weapon_controller";
+
+    /// <summary>物理回调转发：武器持续碰到玩家</summary>
+    private void OnTriggerStay(Collider other) => _binding.InvokeLua("ontriggerstay", other);
+
+    /// <summary>动画事件：技能释放开始（打开碰撞器）</summary>
+    public void StartAttackHit() => _binding.InvokeLua("start_attack_hit");
+
+    /// <summary>动画事件：技能释放结束（关闭碰撞器）</summary>
+    public void StopAttackHit() => _binding.InvokeLua("stop_attack_hit");
 }

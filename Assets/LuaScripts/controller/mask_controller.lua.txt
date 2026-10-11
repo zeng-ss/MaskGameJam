@@ -1,0 +1,62 @@
+-- 面具控制器：绕世界原点旋转 + 定时发射抛物线炮弹
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/MaskController.cs
+--
+-- ⚠️ 过渡说明：ParabolicBullet 本轮已迁 Lua，这里通过 LuaBinding.CallLua 跨语言调用它的 init_bullet。
+--    GameManager 的敌人数值走的是 GameManager 新增的扁平接口（Dictionary 在 Lua 侧访问不了）。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Quaternion = UnityEngine.Quaternion
+local Time = UnityEngine.Time
+local Random = UnityEngine.Random
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+local GameManager = CS.GameManager
+local LuaBinding = CS.LuaBinding
+
+local MaskController = {}
+
+local MASK_KEY = "Mask"
+local PARABOLIC_BULLET_POOL = "ParabolicBullet"
+
+function MaskController:start()
+    self.shotTimer = 0
+    self.currentCoolTime = Random.Range(5, 10)
+end
+
+function MaskController:update()
+    if not GameManager.Instance:HasEnemyConfig(MASK_KEY) then return end
+
+    local cs = self.cs
+    local tr = cs.transform
+    local speed = GameManager.Instance:GetEnemyMoveSpeed(MASK_KEY)
+
+    -- 围绕世界原点(0,0,0)旋转
+    tr:RotateAround(Vector3.zero, Vector3.up, speed * Time.deltaTime)
+    tr:LookAt(Vector3(0, tr.position.y, 0))
+
+    self.shotTimer = self.shotTimer + Time.deltaTime
+    if self.shotTimer >= self.currentCoolTime then
+        local obj = PoolMgr.Instance:GetObj(PARABOLIC_BULLET_POOL)
+        if obj == nil then return end
+
+        local pool = SoundAudioPool.Instance
+        pool:PlaySound(pool.parabolicClip, tr.position)
+
+        obj.transform.position = tr.position
+        -- 朝向世界原点（和面具保持一致）
+        obj.transform.rotation = Quaternion.LookRotation(tr.position - Vector3(0, tr.position.y, 0), Vector3.up)
+
+        -- 主动调用子弹的初始化（避免 OnEnable 时机问题）—— 子弹逻辑在 Lua，转发过去
+        LuaBinding.CallLua(obj:GetComponent(typeof(CS.ParabolicBullet)), "init_bullet", tr.position)
+
+        self.currentCoolTime = Random.Range(3, 8)
+        self.shotTimer = 0
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, MaskController)
+end

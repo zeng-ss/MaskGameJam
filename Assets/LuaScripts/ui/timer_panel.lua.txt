@@ -1,0 +1,98 @@
+-- 下一波敌人倒计时面板
+-- 对应 C# Assets/Scripts/HotUpdate/UI/TimerPanel.cs
+--
+-- 原 C# 用协程做倒计时，这里改成 update 驱动（Lua 侧不方便起协程，每帧判断的开销也很小）
+--
+-- 对外接口（C# 侧 EnemySpawner 迁移后改为）：
+--   LuaBinding.CallLua(timerPanel, "start_countdown", 10f)
+--   或 Lua 侧：CS.LuaBinding.GetLuaInstance(timerPanel):start_countdown(10)
+
+local behaviour = require 'behaviour'
+
+local Tween = CS.LuaTween
+local UIManager = CS.UIManager
+local UnityEngine = CS.UnityEngine
+local Time = UnityEngine.Time
+local Mathf = UnityEngine.Mathf
+local Color = UnityEngine.Color
+local SoundAudioPool = CS.SoundAudioPool
+
+local TimerPanel = {}
+
+-- 结束时的滑出位置（原 C# 写死的 112）
+local FINISH_POSITION_Y = 112
+
+local function format_time(t)
+    -- 对应 C# 的 time.ToString("F1")
+    return string.format("%.1f", t)
+end
+
+function TimerPanel:awake()
+    self.currentTime = 0
+    self.running = false          -- 等价于原 C# 的 countdownCoroutine 是否在跑
+    self.isStartplaySound = false
+end
+
+-- 开始倒计时（原 StartCountdown）
+function TimerPanel:start_countdown(totalTime)
+    self.currentTime = totalTime
+    self.isStartplaySound = false
+    self.running = true
+end
+
+-- 暂停（原 PauseCountdown）
+function TimerPanel:pause_countdown()
+    self.running = false
+end
+
+-- 继续（原 ResumeCountdown）
+function TimerPanel:resume_countdown()
+    self.running = true
+end
+
+-- 停止（原 StopCountdown）
+function TimerPanel:stop_countdown()
+    self.running = false
+end
+
+function TimerPanel:update()
+    if not self.running then return end
+
+    self:update_display()
+
+    self.currentTime = self.currentTime - Time.deltaTime
+    if self.currentTime <= 0 then
+        self.currentTime = 0
+        self.running = false
+        self:update_display()
+        self:on_countdown_finished()
+    end
+end
+
+function TimerPanel:update_display()
+    local cs = self.cs
+    cs.timerText.text = "下一波敌人倒计时：" .. format_time(self.currentTime)
+
+    -- 最后 3 秒：播一次警告音 + 红白闪烁
+    if self.currentTime <= 3 then
+        if not self.isStartplaySound then
+            local pool = SoundAudioPool.Instance
+            pool:PlaySound(pool.warningClip, cs.transform.position)
+            self.isStartplaySound = true
+        end
+
+        local ping = Mathf.PingPong(Time.time * 5, 1)
+        cs.timerText.color = Color.Lerp(Color.red, Color.white, ping)
+    end
+end
+
+function TimerPanel:on_countdown_finished()
+    local cs = self.cs
+    Tween.LocalMoveY(cs.transform, FINISH_POSITION_Y, 0.5, CS.DG.Tweening.Ease.OutBack, function()
+        UIManager.Instance:closePanelByName("TimerPanel")
+    end)
+end
+
+return function(cs)
+    return behaviour.new(cs, TimerPanel)
+end

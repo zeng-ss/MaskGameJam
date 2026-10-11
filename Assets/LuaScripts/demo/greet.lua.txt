@@ -1,4 +1,4 @@
--- 演示子模块加载：require 'demo.greet'
+-- 演示子模块加载：地址就是文件名，require 'greet'
 
 local M = {}
 

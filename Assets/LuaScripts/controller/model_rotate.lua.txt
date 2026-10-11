@@ -1,0 +1,41 @@
+-- 拖拽旋转模型：鼠标/手指横向拖拽绕 Y 轴旋转，带平滑缓动
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/ModelRotate.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Mathf = UnityEngine.Mathf
+local Quaternion = UnityEngine.Quaternion
+local Time = UnityEngine.Time
+
+local ModelRotate = {}
+
+-- 目标角度在 Lua 侧维护（原来 C# 里的 targetYRotation 是私有的）
+function ModelRotate:update()
+    local cs = self.cs
+    if cs.targetModel == nil then return end
+
+    cs.currentRotationY = Mathf.Lerp(cs.currentRotationY, self.targetYRotation or 0, Time.deltaTime * cs.smoothness)
+    cs.targetModel.transform.rotation = Quaternion.Euler(0, cs.currentRotationY, 0)
+end
+
+function ModelRotate:ondrag(eventData)
+    local cs = self.cs
+    if cs.targetModel == nil then return end
+
+    local rotateY = -eventData.delta.x * cs.rotateSpeed * 0.01
+    self.targetYRotation = (self.targetYRotation or 0) + rotateY
+end
+
+function ModelRotate:reset_rotation()
+    local cs = self.cs
+    if cs.targetModel == nil then return end
+
+    cs.currentRotationY = 0
+    self.targetYRotation = 0
+    cs.targetModel.transform.rotation = Quaternion.identity
+end
+
+return function(cs)
+    return behaviour.new(cs, ModelRotate)
+end

@@ -63,5 +63,72 @@ public class GameManager : UnitySingleTonMono<GameManager>
     {
         foreach (var config in RuntimeEnemyConfigDict.Values) { config.ResetToOrigin(); }
     }
-    
+
+    #region Lua 友好接口
+    // xLua 调不了泛型方法，也访问不了 Dictionary<string, EnemyConfigRuntime> 的索引器
+    // （EnemyConfigRuntime 没进 wrap 表），所以这里把「读/写敌人运行时数值」摊平成普通方法给 Lua 用。
+
+    private bool TryGetConfig(string enemyName, out EnemyConfigRuntime config)
+    {
+        config = null;
+        return !string.IsNullOrEmpty(enemyName) && RuntimeEnemyConfigDict.TryGetValue(enemyName, out config);
+    }
+
+    /// <summary>是否存在该敌人的运行时配置</summary>
+    public bool HasEnemyConfig(string enemyName) => TryGetConfig(enemyName, out _);
+
+    /// <summary>取敌人当前伤害（不存在返回 0）</summary>
+    public float GetEnemyDamage(string enemyName) => TryGetConfig(enemyName, out var c) ? c.damage : 0f;
+
+    /// <summary>取敌人当前移速（不存在返回 0）</summary>
+    public float GetEnemyMoveSpeed(string enemyName) => TryGetConfig(enemyName, out var c) ? c.moveSpeed : 0f;
+
+    /// <summary>取敌人当前血量（不存在返回 0）</summary>
+    public float GetEnemyHealth(string enemyName) => TryGetConfig(enemyName, out var c) ? c.health : 0f;
+
+    /// <summary>设置敌人当前伤害</summary>
+    public void SetEnemyDamage(string enemyName, float value)
+    {
+        if (TryGetConfig(enemyName, out var c)) c.damage = value;
+    }
+
+    /// <summary>设置敌人当前移速</summary>
+    public void SetEnemyMoveSpeed(string enemyName, float value)
+    {
+        if (TryGetConfig(enemyName, out var c)) c.moveSpeed = value;
+    }
+
+    /// <summary>设置敌人当前血量</summary>
+    public void SetEnemyHealth(string enemyName, float value)
+    {
+        if (TryGetConfig(enemyName, out var c)) c.health = value;
+    }
+
+    /// <summary>所有敌人的名字（Lua 侧遍历用）</summary>
+    public string[] GetEnemyConfigNames()
+    {
+        var names = new string[RuntimeEnemyConfigDict.Count];
+        RuntimeEnemyConfigDict.Keys.CopyTo(names, 0);
+        return names;
+    }
+
+    /// <summary>
+    /// 难度递增：给所有敌人加属性。
+    /// 对应原 EnemySpawner.UpgradeWave() 里的：
+    ///   enemyData.damage = Mathf.Min(100, enemyData.damage++);
+    ///   enemyData.health = Mathf.Min(9999, enemyData.health + 10);
+    ///   enemyData.moveSpeed = Mathf.Min(50, enemyData.moveSpeed++);
+    /// 注意原写法里的「后置 ++ 配 Min」实际等价于「钳制到上限、不递增」，这里保持同样的行为。
+    /// </summary>
+    /// <param name="addHealth">血量增加量</param>
+    public void ApplyDifficultyUpgrade(float addHealth)
+    {
+        foreach (var c in RuntimeEnemyConfigDict.Values)
+        {
+            c.damage = Mathf.Min(100f, c.damage);
+            c.health = Mathf.Min(9999f, c.health + addHealth);
+            c.moveSpeed = Mathf.Min(50f, c.moveSpeed);
+        }
+    }
+    #endregion
 }

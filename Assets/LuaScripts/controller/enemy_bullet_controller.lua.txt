@@ -1,0 +1,47 @@
+-- 敌人子弹：直线飞行 5 秒后回收，命中玩家扣血
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/EnemyBulletController.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Space = UnityEngine.Space
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+
+local EnemyBulletController = {}
+
+local BULLET_SPEED = 20
+local LIFETIME = 5
+
+function EnemyBulletController:update()
+    -- transform.Translate(Vector3.forward * (20 * dt), Space.Self)
+    self.cs.transform:Translate(Vector3.forward * (BULLET_SPEED * Time.deltaTime), Space.Self)
+
+    self.timer = (self.timer or 0) + Time.deltaTime
+    if self.timer >= LIFETIME then
+        PoolMgr.Instance:PushObj(self.bulletType, self.cs.gameObject)
+        self.timer = 0
+    end
+end
+
+-- 由 RobotController 调用（C# 壳 Init 转发过来，或 Lua 侧直接调）
+function EnemyBulletController:init(bulletType, hit)
+    self.bulletType = bulletType
+    self.hitBloodValue = hit
+end
+
+function EnemyBulletController:ontriggerenter(other)
+    if not other:CompareTag("Player") then return end
+
+    local pool = SoundAudioPool.Instance
+    pool:PlaySound(pool.hitPlayerClip, self.cs.transform.position)
+
+    other.gameObject:GetComponent(typeof(CS.PlayerStats)):TakeDamage(self.hitBloodValue)
+    PoolMgr.Instance:PushObj(self.bulletType, self.cs.gameObject)
+end
+
+return function(cs)
+    return behaviour.new(cs, EnemyBulletController)
+end

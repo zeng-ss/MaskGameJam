@@ -1,0 +1,150 @@
+-- 玩家属性面板（血条 + 数值 + 射击模式切换 + 打开暂停面板）
+-- 对应 C# Assets/Scripts/HotUpdate/UI/PlayerProPanel.cs
+--
+-- ⚠️ 过渡说明：PlayerStats 目前还是 C#（第三批迁移到 Lua），先按 C# 方式访问。
+--    原 C# 是监听 EventCenter 的「玩家面板属性变化」事件来刷新数字，
+--    而 EventCenter 是泛型事件、且触发方（PlayerStats / MaskSystemManager）这一批还没迁，
+--    所以这里先用「每帧比较数值是否变化」代替。等第三批迁完后把 refresh 换成 event.on 即可。
+
+local behaviour = require 'behaviour'
+
+local Tween = CS.LuaTween
+local UIManager = CS.UIManager
+local UnityEngine = CS.UnityEngine
+local Time = UnityEngine.Time
+local Mathf = UnityEngine.Mathf
+local SoundAudioPool = CS.SoundAudioPool
+
+local PlayerProPanel = {}
+
+-- 贴近 C# float.ToString() 的输出（10 -> "10"，10.5 -> "10.5"）
+local function num2str(v)
+    return string.format("%g", v)
+end
+
+function PlayerProPanel:awake()
+    self:resolve_player_stats()
+end
+
+function PlayerProPanel:onenable()
+    local cs = self.cs
+
+    -- 面板会被 UIManager 缓存并跨场景复用（重开时不会重跑 awake），所以这里每次显示都校验一次
+    self:ensure_player_stats()
+
+    cs.changeShootBtn.onClick:AddListener(function() self:change_click() end)
+    cs.openEscPanelBtn.onClick:AddListener(function() self:esc_click() end)
+end
+
+function PlayerProPanel:show()
+    -- UIManager 重开面板走的是 Show()，在这里立刻刷新，避免第一帧显示旧数据
+    self:ensure_player_stats()
+end
+
+function PlayerProPanel:ondisable()
+    local cs = self.cs
+    if cs.openEscPanelBtn ~= nil then cs.openEscPanelBtn.onClick:RemoveAllListeners() end
+    if cs.changeShootBtn ~= nil then cs.changeShootBtn.onClick:RemoveAllListeners() end
+end
+
+-- 取玩家属性组件（PlayerStats 当前仍是 C#）
+function PlayerProPanel:resolve_player_stats()
+    local go = UnityEngine.GameObject.FindGameObjectWithTag("Player")
+    local stats = (go ~= nil) and go:GetComponent(typeof(CS.PlayerStats)) or nil
+
+    if stats ~= self.playerStats then
+        -- 换玩家了（切场景）：重置首帧初始化与文本缓存，让血条和数字重新刷一遍
+        self.playerStats = stats
+        self.isInitPlayerHealth = false
+        self.lastDamage, self.lastMaxHealth = -1, -1
+        self.lastMoveSpeed, self.lastShootRate = -1, -1
+    end
+end
+
+-- ⚠️ 关键：切场景后旧玩家会被销毁，但 Lua 里的 userdata 仍然「非 nil」，
+--    直接调它的方法会抛 `Non-static method requires a target`。
+--    所以缓存的玩家引用每帧都要用 IsAlive 校验，死了就重新找。
+function PlayerProPanel:ensure_player_stats()
+    local stats = self.playerStats
+    if stats == nil or not CS.LuaBinding.IsAlive(stats) then
+        self:resolve_player_stats()
+        stats = self.playerStats
+    end
+    return stats
+end
+
+function PlayerProPanel:update()
+    local cs = self.cs
+    local stats = self:ensure_player_stats()
+    if stats == nil or cs.healthImage == nil then return end
+
+    local maxHealth = stats:GetFinalMaxHealthValue()
+
+    -- 首次进入：把血量初始化满，并让下面的文本比较能触发一次刷新
+    if not self.isInitPlayerHealth then
+        self.currentMaxHealth = maxHealth
+        stats.CurrentHealth = maxHealth
+        self.isInitPlayerHealth = true
+
+        self.lastDamage, self.lastMaxHealth = -1, -1
+        self.lastMoveSpeed, self.lastShootRate = -1, -1
+    end
+
+    -- 血条平滑逼近（0.5 是变化速度系数，越大越快）
+    local target = Mathf.Clamp01(stats.CurrentHealth / maxHealth)
+    cs.healthImage.fillAmount = Mathf.MoveTowards(cs.healthImage.fillAmount, target, Time.deltaTime * 0.5)
+
+    -- 属性文本：检测到变化才刷新
+    local dmg = stats:GetFinalAttackDamage()
+    local spd = stats:GetFinalMoveSpeed()
+    local rate = stats:GetFinalShootRate()
+    if dmg ~= self.lastDamage or maxHealth ~= self.lastMaxHealth
+        or spd ~= self.lastMoveSpeed or rate ~= self.lastShootRate then
+
+        self.lastDamage, self.lastMaxHealth = dmg, maxHealth
+        self.lastMoveSpeed, self.lastShootRate = spd, rate
+
+        cs.damaageText.text = num2str(dmg)
+        cs.fangyuText.text = num2str(maxHealth)
+        cs.moveSpeedText.text = num2str(spd)
+        cs.shootRateText.text = num2str(rate)
+    end
+end
+
+-- 单射 / 散射切换
+function PlayerProPanel:change_click()
+    local cs = self.cs
+    local text = cs.changeShootBtn:GetComponentInChildren(typeof(CS.TMPro.TMP_Text))
+    if text.text == "散射" then
+        cs.isNormalShoot = false
+        text.text = "单射"
+    else
+        cs.isNormalShoot = true
+        text.text = "散射"
+    end
+end
+
+-- 打开暂停面板（EscPanel 从屏幕上方滑入）
+function PlayerProPanel:esc_click()
+    local cs = self.cs
+    local pool = SoundAudioPool.Instance
+    pool:PlaySound(pool.showPanelClip, cs.transform.position)
+
+    UIManager.Instance:openPanelByName("EscPanel", function(panel)
+        if panel == nil then return end
+        local tr = panel.transform
+        tr.localPosition = UnityEngine.Vector3(0, 750, 0)
+        Tween.LocalMove(tr, UnityEngine.Vector3.zero, 0.5)
+    end)
+end
+
+-- 供 EnemySpawner（Lua）刷新波次文本
+function PlayerProPanel:set_wave_text(text)
+    if self.cs.currentWaveText ~= nil then
+        self.cs.currentWaveText.text = text
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, PlayerProPanel)
+end

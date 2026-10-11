@@ -1,49 +1,25 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.UI;
+
 /// <summary>
-/// 旋转模型方法  
+/// 拖拽旋转模型 —— 逻辑全部在 Lua：Assets/LuaScripts/controller/model_rotate.lua.txt
+///
+/// OnDrag 来自 IDragHandler（EventSystem 的 UI 事件），由子类转发。
+/// 接口必须保留在壳上，否则 EventSystem 不会回调。
 /// </summary>
-public class ModelRotate : MonoBehaviour,IDragHandler
+public class ModelRotate : LuaBehaviour, IDragHandler
 {
     [Header("旋转控制")]
     public GameObject targetModel; // 要旋转的模型容器
     public float rotateSpeed;
-    private float targetYRotation;
     public float currentRotationY;
-    public float smoothness;  // 平滑度，0=无平滑，越大越平滑
+    public float smoothness; // 平滑度，0=无平滑，越大越平滑
 
+    protected override string DefaultLuaModule => "model_rotate";
 
-    public void OnDrag(PointerEventData eventData)
-    {
-        if (targetModel == null) return;
+    /// <summary>UI 拖拽回调转发</summary>
+    public void OnDrag(PointerEventData eventData) => _binding.InvokeLua("ondrag", eventData);
 
-        // 根据鼠标拖拽旋转模型
-        float rotateY = -eventData.delta.x * rotateSpeed * 0.01f;
-        targetYRotation += rotateY;
-    }
-
-    private void Update()
-    {
-        if (targetModel == null) return;
-        currentRotationY = Mathf.Lerp(currentRotationY, targetYRotation, Time.deltaTime * smoothness);
-        // 应用旋转（只绕Y轴）
-        targetModel.transform.rotation = Quaternion.Euler(0f, currentRotationY, 0f);
-    }
-
-    // 重置旋转
-    public void ResetRotation()
-    {
-        if (targetModel != null)
-        {
-            currentRotationY = 0f;
-            targetYRotation = 0f;
-            targetModel.transform.rotation = Quaternion.identity;
-        }
-    }
-    
-    
+    /// <summary>重置旋转（外部可能调用）</summary>
+    public void ResetRotation() => _binding.InvokeLua("reset_rotation");
 }

@@ -1,0 +1,47 @@
+-- 提示面板
+-- 对应 C# Assets/Scripts/HotUpdate/UI/TipPanel.cs（C# 侧只剩序列化字段的壳）
+--
+-- 调用方式：
+--   Lua：CS.LuaBinding.GetLuaInstance(tipPanel):show_tip("内容")
+--   C# ：LuaBinding.CallLua(tipPanel, "show_tip", "内容")
+
+local behaviour = require 'behaviour'
+
+local Tween = CS.LuaTween
+
+local TipPanel = {}
+
+-- 淡入/淡出时长（原 C# 的 fadeDuration 私有字段）
+local FADE_DURATION = 0.6
+
+function TipPanel:awake()
+    local cs = self.cs
+    -- 原 C# 在 Awake 里强制从自身组件取 CanvasGroup
+    cs.canvasGroup1 = cs:GetComponent(typeof(CS.UnityEngine.CanvasGroup))
+end
+
+function TipPanel:onenable()
+    local cs = self.cs
+    if cs.showTime >= 3 then
+        cs.showTime = 1
+    end
+end
+
+-- 显示提示：淡入 -> 停留 showTime -> 淡出 -> 关面板
+function TipPanel:show_tip(content)
+    local cs = self.cs
+    cs.tipText.text = content
+    cs.canvasGroup1.alpha = 0
+
+    Tween.Fade(cs.canvasGroup1, 1, FADE_DURATION, function()
+        Tween.Delay(cs.showTime, function()
+            Tween.Fade(cs.canvasGroup1, 0, FADE_DURATION, function()
+                CS.UIManager.Instance:closePanelByName("TipPanel")
+            end)
+        end)
+    end)
+end
+
+return function(cs)
+    return behaviour.new(cs, TipPanel)
+end

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using XLua;
@@ -7,8 +7,10 @@ using XLua;
 //    1. Lua 脚本源文件放在 Assets/LuaScripts 下，后缀必须是 .lua.txt（Unity 才能识别为 TextAsset）
 //    2. 用菜单 Build/PrepareLuaAssets 把脚本注册进 Addressables 的 "Lua" 分组
 //    3. 运行时先下载 "Lua" 分组，再调用 XLuaManager.Instance.StartLua()
-//    4. loader 会把 require 的路径映射成 Addressables 地址：require "main" -> lua/main.lua
-//       require "ui.panel" -> lua/ui/panel.lua（点号会被替换成斜杠）
+//    4. Addressables 地址就是「文件名」，不带目录：
+//         require "main"   -> main.lua
+//         require "greet"  -> greet.lua
+//       写成带点的 require "demo.greet" 也能命中 greet.lua（只取最后一段，方便兼容旧写法）
 
 /// <summary>
 /// xLua 热更新管理器
@@ -17,9 +19,6 @@ using XLua;
 public class XLuaManager : MonoBehaviour
 {
     public static XLuaManager Instance { get; private set; }
-
-    /// <summary>Lua 脚本在 Addressables 中的地址前缀</summary>
-    private const string LuaAddressPrefix = "lua/";
 
     /// <summary>默认入口模块名</summary>
     private const string DefaultEntry = "main";
@@ -57,17 +56,25 @@ public class XLuaManager : MonoBehaviour
     }
 
     /// <summary>
-    /// xLua 自定义加载器：把 require 路径映射为 Addressables 地址
+    /// xLua 自定义加载器：把 require 的名字映射为 Addressables 地址
+    /// 地址就是文件名：require "greet" -> greet.lua
     /// 返回 null 表示本加载器无法提供该脚本，xLua 会继续尝试其它加载器
     /// </summary>
     private byte[] AddressablesLuaLoader(ref string filepath)
     {
-        // require "ui.panel" -> lua/ui/panel.lua
-        string address = LuaAddressPrefix + filepath.Replace('.', '/') + ".lua";
+        // 只取最后一段：require "greet" 和 require "demo.greet" 都映射到 greet.lua
+        string name = filepath.Replace('.', '/');
+        int slash = name.LastIndexOf('/');
+        if (slash >= 0) name = name.Substring(slash + 1);
+
+        //string address = name + ".lua";
+        string address = name;
         TextAsset asset = LoadLuaAsset(address);
         if (asset == null)
         {
-            Debug.LogError($"[XLuaManager] 找不到 Lua 脚本，Addressables 地址: {address}");
+            Debug.LogError(
+                $"[XLuaManager] 找不到 Lua 脚本，require '{filepath}' -> Addressables 地址 {address}" +
+                "（是否漏跑 Build/PrepareLuaAssets，或地址与文件名不一致？）");
             return null;
         }
 
@@ -147,6 +154,11 @@ public class XLuaManager : MonoBehaviour
     {
         if (_luaEnv == null) return;
 
+        // 1. 先释放所有 Lua 绑定：清掉 C# 侧持有的 LuaTable / 生命周期委托引用。
+        //    否则 xLua 认为「还有 C# 回调挂着」，LuaEnv.Dispose() 会直接抛
+        //    InvalidOperationException: try to dispose a LuaEnv with C# callback!
+        LuaBinding.DisposeAll();
+
         foreach (var kv in _luaCache)
         {
             if (kv.Value != null) Addressables.Release(kv.Value);
@@ -154,7 +166,18 @@ public class XLuaManager : MonoBehaviour
 
         _luaCache.Clear();
 
-        _luaEnv.Dispose();
+        // 2. 再释放 LuaEnv。
+        //    退出阶段可能还有零星回调没被回收（例如没来得及 kill 的 DOTween 回调挂在 Lua 闭包上），
+        //    此时 xLua 仍会拒绝释放 —— 进程马上就要结束，记一条警告即可，别再往上抛。
+        try
+        {
+            _luaEnv.Dispose();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[XLuaManager] LuaEnv 释放时仍有未回收的 C# 回调（退出阶段可忽略）: {e.Message}");
+        }
+
         _luaEnv = null;
         Instance = null;
         Debug.Log("[XLuaManager] LuaEnv 已释放");

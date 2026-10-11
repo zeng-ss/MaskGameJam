@@ -1,0 +1,34 @@
+-- 爆炸特效：显示后延时 2 秒回收进对象池
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/ExploController.cs
+--
+-- 原来用协程 StartCoroutine(RecycleAfterDelay(2))，改成 update 计时：
+-- onenable 里重置计时（对象池取出时触发），到点后 PushObj 回收。
+
+local behaviour = require 'behaviour'
+
+local Time = CS.UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+
+local ExploController = {}
+
+local POOL_NAME = "Explo"
+local RECYCLE_DELAY = 2
+
+function ExploController:onenable()
+    self.timer = 0
+    self.waiting = true
+end
+
+function ExploController:update()
+    if not self.waiting then return end
+
+    self.timer = self.timer + Time.deltaTime
+    if self.timer >= RECYCLE_DELAY then
+        self.waiting = false
+        PoolMgr.Instance:PushObj(POOL_NAME, self.cs.gameObject)
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, ExploController)
+end

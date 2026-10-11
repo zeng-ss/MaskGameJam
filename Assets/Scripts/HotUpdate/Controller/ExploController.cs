@@ -1,20 +1,12 @@
-using UnityEngine;
-using System.Collections;
+﻿using UnityEngine;
 
-public class ExploController : MonoBehaviour
+/// <summary>
+/// 爆炸特效 —— 逻辑全部在 Lua：Assets/LuaScripts/controller/explo_controller.lua.txt
+///
+/// 原来用协程 StartCoroutine(RecycleAfterDelay(2)) 延时回收，
+/// 现在改成 update 计时（跨语言调协程没必要，也更容易排查）。
+/// </summary>
+public class ExploController : LuaBehaviour
 {
-    private string ExploPoolName = "Explo";
-    
-    private void OnEnable()
-    {
-        StartCoroutine(RecycleAfterDelay(2));
-    }
-
-    // 延迟回收协程
-    private IEnumerator RecycleAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-        PoolMgr.Instance.PushObj(ExploPoolName, gameObject);
-    }
-    
+    protected override string DefaultLuaModule => "explo_controller";
 }

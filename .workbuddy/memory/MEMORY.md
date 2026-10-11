@@ -113,14 +113,66 @@ public static Func<MemberInfo, bool> MethodFilter = (memberInfo) =>
 （注：早期曾直接改 xLua 源码/模板来处理上面 1、2——模板改 in 参数、Utils.cs 加 ref struct 检查。
 这些补丁保留着当双保险，但真正起作用的是 BlackList 配置，日后升级 xLua 只需保留配置即可。）
 
-### 迁移策略（2026-10-11 评估结论）
-框架跑通后给出的建议，**不主张把 34 个 C# 文件全量翻译成 Lua**：
-- 该迁：UI 面板逻辑（8 个）、流程/关卡/数值配置 —— 调整需求最多、非每帧执行，热更价值最高，约 1200 行。
-- 不该迁：PlayerController、TopDownCameraFollow、EnemyController / EnemySpawner —— 每帧逻辑，
-  跨语言调用有开销且敌人数量多时会放大，留在 C#，用 Lua 调参数/开关控制行为。
-- 热更的是「内容和交互」，不是「每帧运算」。全迁约 4000 行且需完整回归测试，性价比低。
-- 已知限制：壳里 `DefaultLuaModule` 是硬编码的，「哪个物体挂哪个 Lua 脚本」这件事热更不了，
-  只能热更脚本内容；C# 字段名与 Lua 的 `self.cs.xxx` 是隐式契约，改名必须同步。
+### 迁移策略（2026-10-11 最终决定：全量迁移，分三批）
+用户明确要求「整体迁移」，并选择：枚举/纯数据类**全部搬进 Lua**、节奏**分三批推进**。
+（早期我曾建议只迁 UI + 配置、每帧逻辑留 C#，用户决定全迁，按用户要求执行。）
+
+**迁移边界 —— 服务/基础设施层必须留 C#**：
+- AOT 全部（EventCenter / SceneMgr / ResMgr / PoolMgr / SceneObjectManager / 单例基类 /
+  BasePanel / Lua 桥接 / HotUpdateSystem）
+- HotUpdate 里的服务型单例：`UIManager`（泛型 `openPanel<T>` + Addressables 面板加载 + Canvas 管理）、
+  `SoundAudioPool`（被 Addressables 实例化的常驻单例）
+理由：被 C# 与 Lua 共同调用，重度依赖泛型/协程/Addressables，迁走收益低风险高。
+
+**迁移模板**（每迁一个逻辑类 = 两件事）：
+1. C# 壳：`Xxx : LuaPanel` / `Xxx : LuaBehaviour`，**只保留预制体上的序列化字段（名字不能改）**
+   + `protected override string DefaultLuaModule => "xxx";` → **预制体零改动**
+2. Lua 模块 `Assets/LuaScripts/<目录>/xxx.lua.txt`（地址 = 文件名），
+   用 `behaviour.new(cs, M)` 导出工厂函数
+
+**新增的基础设施（后续批次复用）**：
+- `LuaBinding`：`show`/`hide` 转发、`GetLua/GetLuaByTag/GetLuaByName`、`CallLua(组件,"lua方法名",参数...)`
+  （调用失败会打可读 warning，不再静默返回 null）、**`IsAlive(obj)`**（跨帧缓存场景对象的存活校验）、
+  **`DisposeAll()`**（退出前统一释放，必须早于 `LuaEnv.Dispose()`）
+- `LuaPanel`：override `Show()`/`Hide()`
+- `LuaTween`（AOT/Lua）：**xLua 调不了 C# 扩展方法**，把 DOTween 的 DOLocalMove/DOFade 等包成静态方法
+- `Assets/LuaScripts/framework/event.lua.txt`：Lua 事件中心（C# 的 EventCenter 全是泛型，Lua 调不了）
+- `behaviour.lua` 的 LIFECYCLE 增加 `show` / `hide`
+
+**跨批次过渡写法**：后续批次的类还没迁时，Lua 里先按 C# 方式访问
+（`go:GetComponent(typeof(CS.PlayerStats))`、`CS.MaskSystemManager.Instance.xxx`），
+等迁完再改成 Lua 形式。每个受影响文件顶部都写了「⚠️ 过渡说明」。
+
+**已知限制**：壳里 `DefaultLuaModule` 是硬编码的，「哪个物体挂哪个 Lua 脚本」这件事热更不了，
+只能热更脚本内容；**C# 字段名与 Lua 的 `self.cs.xxx` 是隐式契约，改名必须同步**。
+
+**第 2 批（Controller 层 13 个）新增的迁移手法**（后续批次继续用）：
+- **协程一律改成 update 状态机**（延时回收 / 循环间隔生成 / 等 1 秒再追击）。
+  不引入 `xlua.util.cs_generator`，避免跨语言协程的额外不确定性。
+  典型：`EnemySpawner` 的「每 0.2 秒生成一个」= `pendingSpawnCount` + 计时器 + `batchSpawnPos` 位置表。
+- **Unity 消息由子类转发**。基类只转发生命周期；`OnTriggerEnter/Stay`、`IDragHandler.OnDrag`
+  这类「只有部分组件需要」的消息，在壳里实现并 `_binding.InvokeLua("ontriggerenter", other)`。
+  参数可以是 C# 对象（Collider / PointerEventData），xLua 会 push 成 userdata（未注册类型走反射也可用）。
+  新增实例级 `LuaBinding.InvokeLua()`（带 `_luaFuncCache` 缓存，适合每帧/每次碰撞触发）。
+- **动画事件 / 外部调用的 public 方法必须留在壳上**（方法名不能改），内部转给 Lua。
+  例：`EnemyController.StartAttackHit/StopAttackHit`（动画事件）、`DecreaseHealth`（被 Bullet 调）。
+- **集合访问一律摊平成下标方法**。`List<EnemyType>`、`List<GameObject> rains`、`List<string>` 这类
+  在 Lua 侧不可靠，C# 壳提供 `GetEnemyTypeCount/GetEnemyPrefabName(i)/SetEnemyWeight(i,v)` 等。
+  `GameManager.RuntimeEnemyConfigDict`（`Dictionary<string, EnemyConfigRuntime>`）同样摊平：
+  `GetEnemyDamage/SetEnemyHealth/GetEnemyConfigNames/ApplyDifficultyUpgrade`。
+- **`UnityEngine.Random` 的重载有歧义坑**：Lua 只有 number，`Random.Range(0, 1)` 会命中 int 重载恒定返回 0。
+  统一走新的 `CS.LuaUtil`（`Value01/Range/RangeInt/OnUnitSphere/ParticleDuration/Distance`）。
+- **枚举在 Lua 侧是「带缓存的 userdata」**（`ObjectTranslator.enumMap`），同一枚举值始终是同一对象，
+  **可以安全用作 table key**（KeyBindingManager 的绑定表就是这么写的）。
+  `enumMap` 分支见 `ObjectTranslator.cs:1252-1267`。
+- **`const` 字段 Lua 取不到**（`Mathf.Deg2Rad`、`NavMesh.AllAreas`）→ 直接写字面量 / `math.rad`。
+- **单例基类冲突**：`KeyBindingManager` 原继承 `UnitySingleTonMono<T>`，改 `LuaBehaviour` 后单继承被占，
+  在壳里自己实现静态 `Instance`（跨场景保留 + 重复实例自毁），行为对齐原基类。
+- **访问修饰符要放开**：`WeaponController.collider` 原是 `private [SerializeField]`，Lua 读不到 → 改 `public`。
+
+**进度**：第 1 批（基础设施 + UI 层 5 个面板）✅ 2026-10-11，运行时两个坑已修并验证通过；
+**第 2 批 Controller 层 13 个 ✅ 2026-10-11**（`SoundAudioPool` 判定为服务层，保留 C#），待用户验证；
+之后是第 3 批 XQL 10 个 + 数据/枚举类。
 
 ### Lua 热更管线约定
 - 脚本源目录：`Assets/LuaScripts/`，**后缀必须是 `.lua.txt`**（否则 Unity 不识别为 TextAsset）。
@@ -132,6 +184,30 @@ public static Func<MemberInfo, bool> MethodFilter = (memberInfo) =>
   原 `XLuaManager.LuaAddressPrefix` / `Build.LuaAddressPrefix` 常量已删除。
   `Build/ListLuaAddresses` 改用 label 判断（地址已无统一前缀）。
 - 运行时：`HotUpdateSystem.LoadLuaScripts()` → 用 label `Lua` 整组下载 → 创建 `XLuaManager` → `InitLuaEnv()` → `StartLua()`（即 `require 'main'`）。
+
+### 🔴 xLua 两条必踩的通用坑（2026-10-11 UI 层验证时踩到，务必遵守）
+1. **「非 nil 的 userdata」≠「对象还活着」**
+   `XLuaManager.Update()` 每帧 `_luaEnv.Tick()` → `ObjectPool.Check` 会把**已销毁的 UnityEngine.Object**
+   的槽位置空（`ObjectValidCheck` 对 destroyed 返回 false → `Replace(index, null)`）。
+   于是 Lua 里缓存的 `obj` 仍是 userdata、`obj ~= nil` 成立，但 C# 侧 `FastGetCSObj` 得到 null，
+   调它的实例方法就抛 **`LuaException: c# exception:Non-static method requires a target`**
+   （`MethodWarpsCache.cs:242` 的 `method.Invoke(targetNeeded ? target : null, args)`）。
+   → **凡跨帧缓存 C# 场景对象，每帧用之前必须 `CS.LuaBinding.IsAlive(obj)` 校验**。
+   最典型的触发场景：**`UIManager` 用 `UIPanelDict` 缓存面板，重开走 `Show()` 而不重跑 `Awake`**，
+   旧面板里的玩家引用在切场景后就成了"僵尸 userdata"。Lua 侧的 `show`/`onenable` 钩子要顺手重取一次。
+2. **`LuaEnv.Dispose()` 前必须先释放所有绑定**
+   我们通过 `LuaTable.Get<Action>("update")` 拿的生命周期委托、以及 `AddListener(function() end)`
+   闭包，xLua 都算「C# callback」；C# 侧只要还持有 LuaTable/委托引用，`delegate_bridges`
+   里的 WeakReference 就还活着 → `LuaEnv.Dispose()` 抛
+   `InvalidOperationException: try to dispose a LuaEnv with C# callback!`。
+   → `XLuaManager.Dispose()` 里 **先 `LuaBinding.DisposeAll()` 再 `_luaEnv.Dispose()`**，
+   并把 `Dispose()` 包 try/catch（退出时场景 UnityEvent 闭包可能还没回收，记 warning 即可）。
+
+### 排查 Editor.log 的正确姿势
+`Logs/Editor.log` 是**跨会话累积**的（当前已 22 MB / 14 万行）。里面大量 `error CS` 可能是
+旧 asmdef 时代的残留（特征：报错路径含 `Library/Bee/artifacts/*/XLua.ref.dll`、
+`XLua.Gen.asmdef` 之类）。**先定位最后一次 `LUA: [lua] main.lua loaded` 的行号，只看它之后的日志**，
+再按 `^[A-Za-z]*Exception: ` 去重统计，才能得到"当前这次运行真正报什么错"。
 - ⚠️ **`Addressables.DownloadDependenciesAsync(key, autoReleaseHandle)` 第二个参数必须传 `false`。**
   传 `true` 时句柄会在操作完成后被自动释放，紧接着访问 `.Status` 会抛
   `Exception: Attempting to use an invalid operation handle`（`AsyncOperationHandle.get_InternalOp` → 第 466 行）。

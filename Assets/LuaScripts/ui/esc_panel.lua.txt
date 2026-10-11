@@ -1,0 +1,111 @@
+-- 暂停/退出面板
+-- 对应 C# Assets/Scripts/HotUpdate/UI/EscPanel.cs
+--
+-- ⚠️ 过渡说明：PlayerStats / MaskSystemManager 目前还是 C#（第三批迁移），先按 C# 方式访问
+
+local behaviour = require 'behaviour'
+
+local Tween = CS.LuaTween
+local UIManager = CS.UIManager
+local UnityEngine = CS.UnityEngine
+
+local EscPanel = {}
+
+-- 关闭时需要滑出到屏幕外的目标位置（原 C# 里写死的 (0, 751, 0)）
+local HIDE_POSITION = UnityEngine.Vector3(0, 751, 0)
+
+function EscPanel:start()
+    local cs = self.cs
+
+    cs.backBtn.onClick:AddListener(function() self:back_click() end)
+    cs.pauseBtn.onClick:AddListener(function() self:pause_click() end)
+    cs.closeBtn.onClick:AddListener(function() self:close_click() end)
+
+    self:add_hover_events()
+end
+
+-- 关闭按钮：音效 -> 滑出屏幕 -> 关面板
+function EscPanel:close_click()
+    local cs = self.cs
+    local pool = CS.SoundAudioPool.Instance
+    pool:PlaySound(pool.panelHideClip, cs.transform.position)
+
+    Tween.LocalMove(cs.transform, HIDE_POSITION, 0.5, function()
+        UIManager.Instance:closePanelByName("EscPanel")
+    end)
+end
+
+-- 暂停/继续切换
+function EscPanel:pause_click()
+    local cs = self.cs
+    local pool = CS.SoundAudioPool.Instance
+    pool:PlaySound(pool.btnSeletClip, cs.transform.position)
+
+    local pauseText = cs.pauseBtn:GetComponentInChildren(typeof(CS.TMPro.TMP_Text))
+    if pauseText.text == "暂停" then
+        UnityEngine.Time.timeScale = 0
+        pauseText.text = "继续"
+    else
+        UnityEngine.Time.timeScale = 1
+        pauseText.text = "暂停"
+    end
+end
+
+-- 返回主菜单：回满血 -> 切场景 -> 清理状态
+function EscPanel:back_click()
+    local cs = self.cs
+    local pool = CS.SoundAudioPool.Instance
+    pool:PlaySound(pool.btnSeletClip, cs.transform.position)
+
+    -- 玩家血量回满（PlayerStats 当前仍是 C#）
+    local playerGo = UnityEngine.GameObject.FindGameObjectWithTag("Player")
+    if playerGo ~= nil then
+        local stats = playerGo:GetComponent(typeof(CS.PlayerStats))
+        if stats ~= nil then
+            stats.CurrentHealth = stats:GetFinalMaxHealthValue()
+        end
+    end
+
+    CS.SceneMgr.Instance:LoadSceneAsync("StartScene", function()
+        CS.PoolMgr.Instance:Clear()
+        CS.MaskSystemManager.Instance.IsMaskSelected = false
+
+        UIManager.Instance:closePanelByName("EscPanel")
+        UIManager.Instance:closePanelByName("PlayerProPanel")
+    end)
+end
+
+-- 给三个按钮都挂上鼠标悬停音效
+function EscPanel:add_hover_events()
+    self:add_hover_to_button(self.cs.backBtn)
+    self:add_hover_to_button(self.cs.pauseBtn)
+    self:add_hover_to_button(self.cs.closeBtn)
+end
+
+function EscPanel:add_hover_to_button(button)
+    if button == nil then return end
+
+    local trigger = button.gameObject:GetComponent(typeof(UnityEngine.EventSystems.EventTrigger))
+    if trigger == nil then
+        trigger = button.gameObject:AddComponent(typeof(UnityEngine.EventSystems.EventTrigger))
+    end
+
+    local entry = UnityEngine.EventSystems.EventTrigger.Entry()
+    entry.eventID = UnityEngine.EventSystems.EventTriggerType.PointerEnter
+    entry.callback:AddListener(function(data)
+        local pool = CS.SoundAudioPool.Instance
+        pool:PlaySound(pool.hoverClip, self.cs.transform.position)
+    end)
+    trigger.triggers:Add(entry)
+end
+
+function EscPanel:ondestroy()
+    local cs = self.cs
+    if cs.backBtn ~= nil then cs.backBtn.onClick:RemoveAllListeners() end
+    if cs.pauseBtn ~= nil then cs.pauseBtn.onClick:RemoveAllListeners() end
+    if cs.closeBtn ~= nil then cs.closeBtn.onClick:RemoveAllListeners() end
+end
+
+return function(cs)
+    return behaviour.new(cs, EscPanel)
+end

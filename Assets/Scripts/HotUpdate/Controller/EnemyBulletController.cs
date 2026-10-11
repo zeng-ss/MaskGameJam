@@ -1,38 +1,20 @@
-using UnityEngine;
+﻿using UnityEngine;
 
-public class EnemyBulletController : MonoBehaviour
+/// <summary>
+/// 敌人子弹 —— 逻辑全部在 Lua：Assets/LuaScripts/controller/enemy_bullet_controller.lua.txt
+///
+/// OnTriggerEnter 是 Unity 的物理回调，LuaBehaviour 只转发生命周期消息，
+/// 所以碰撞这类「只有部分组件需要」的消息由子类自己转发（见下面的 OnTriggerEnter）。
+/// </summary>
+public class EnemyBulletController : LuaBehaviour
 {
-    private float hitBloodValue;
-    private string bulletType;
-    private float timer;
+    protected override string DefaultLuaModule => "enemy_bullet_controller";
 
-    private void Update()
-    {
-        // 移动子弹
-        transform.Translate(Vector3.forward * (20 * Time.deltaTime), Space.Self);
-        timer += Time.deltaTime;
-        // 发射后5秒回收
-        if (timer >= 5f)
-        {
-            PoolMgr.Instance.PushObj(bulletType, gameObject);
-            timer = 0;
-        }
-    }
+    /// <summary>物理回调转发：打到玩家身上</summary>
+    private void OnTriggerEnter(Collider other) => _binding.InvokeLua("ontriggerenter", other);
 
-    public void Init(string bulletType,float hit)
-    {
-        hitBloodValue = hit;
-        this.bulletType = bulletType;
-    }
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if (!other.CompareTag("Player")) return;
-        SoundAudioPool.Instance.PlaySound(SoundAudioPool.Instance.hitPlayerClip,transform.position);
-        // 玩家扣血
-        other.gameObject.GetComponent<PlayerStats>().TakeDamage(hitBloodValue);
-        // 回收子弹
-        PoolMgr.Instance.PushObj(bulletType, gameObject);
-    }
-    
+    /// <summary>
+    /// 发射时由 RobotController 调用（保留 C# 入口，内部转给 Lua 的 init）
+    /// </summary>
+    public void Init(string bulletType, float hit) => _binding.InvokeLua("init", bulletType, hit);
 }

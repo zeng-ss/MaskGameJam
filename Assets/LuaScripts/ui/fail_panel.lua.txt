@@ -1,0 +1,44 @@
+-- 失败面板
+-- 对应 C# Assets/Scripts/HotUpdate/UI/FailPanel.cs
+--
+-- ⚠️ 过渡说明：PlayerStats / MaskSystemManager 目前还是 C#（计划第三批迁移到 Lua），
+--    所以这里先按 C# 方式访问。它们迁完之后，把下面两处改成 Lua 形式即可：
+--      local stats = CS.LuaBinding.GetLuaByTag("Player")        -> stats.cs.CurrentHealth / stats:get_final_max_health_value()
+--      CS.LuaBinding.GetLuaByName("MaskSystemManager")           -> maskSystem.cs.IsMaskSelected = false
+
+local behaviour = require 'behaviour'
+
+local FailPanel = {}
+
+function FailPanel:start()
+    local cs = self.cs
+    cs.backButton.onClick:AddListener(function() self:back_click() end)
+
+    -- 进面板先把玩家血量回满
+    local playerGo = CS.UnityEngine.GameObject.FindGameObjectWithTag("Player")
+    if playerGo ~= nil then
+        local stats = playerGo:GetComponent(typeof(CS.PlayerStats))
+        if stats ~= nil then
+            stats.CurrentHealth = stats:GetFinalMaxHealthValue()
+        end
+    end
+end
+
+function FailPanel:back_click()
+    CS.SceneMgr.Instance:LoadSceneAsync("StartScene", function()
+        CS.MaskSystemManager.Instance.IsMaskSelected = false
+
+        CS.UIManager.Instance:closePanelByName("FailPanel")
+        CS.UIManager.Instance:closePanelByName("PlayerProPanel")
+    end)
+end
+
+function FailPanel:ondestroy()
+    if self.cs.backButton ~= nil then
+        self.cs.backButton.onClick:RemoveAllListeners()
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, FailPanel)
+end

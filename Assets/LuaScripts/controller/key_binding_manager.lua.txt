@@ -1,0 +1,97 @@
+-- 按键绑定管理器：维护「操作 → 按键」映射，提供按下/按住查询
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/KeyBindingManager.cs
+--
+-- 原来绑定表是 C# 的 Dictionary<GameAction, KeyBinding>，这里用 Lua table 存
+-- （key 就是 GameAction 枚举值，在 Lua 里表现为数字）。
+-- GameAction / KeyBinding 类型仍定义在 C# 的 AOT/Manager/GameData.cs。
+
+local behaviour = require 'behaviour'
+
+local GameAction = CS.GameAction
+local KeyCode = CS.UnityEngine.KeyCode
+local Input = CS.UnityEngine.Input
+local Vector2 = CS.UnityEngine.Vector2
+local UIManager = CS.UIManager
+local LuaBinding = CS.LuaBinding
+
+local KeyBindingManager = {}
+
+-- 默认绑定：{ 操作, 按键, 显示名 }
+-- 注意 GameAction 枚举在 Lua 侧是「数字」，所以这里用数组存、遍历时再展开
+local DEFAULT_BINDINGS = {
+    { GameAction.Crouch,    KeyCode.C,      "下蹲" },
+    { GameAction.PickUp,    KeyCode.E,      "捡起" },
+    { GameAction.Attack,    KeyCode.J,      "攻击" },
+    { GameAction.Drop,      KeyCode.G,      "丢弃道具" },
+    { GameAction.Jump,      KeyCode.Space,  "跳跃" },
+    { GameAction.Interact,  KeyCode.F,      "交互" },
+    { GameAction.UsingItem, KeyCode.Mouse1, "使用道具" },
+}
+
+function KeyBindingManager:start()
+    self:init_default_bindings()
+    if self.cs.isEscKey ~= nil then
+        -- 保持与 C# 字段的同步（面板开关时外部可能改它）
+        self.isEscKey = self.cs.isEscKey
+    end
+end
+
+-- 初始化 / 重置为默认映射
+function KeyBindingManager:init_default_bindings()
+    self.bindings = {}
+    for i = 1, #DEFAULT_BINDINGS do
+        local b = DEFAULT_BINDINGS[i]
+        self.bindings[b[1]] = { action = b[1], bindedKey = b[2], actionName = b[3] }
+    end
+end
+
+function KeyBindingManager:reset_bindings()
+    self:init_default_bindings()
+end
+
+-- 更新单按键绑定；若该按键已被别的操作占用 → 弹提示并拒绝
+function KeyBindingManager:update_binding(action, keyCode, actionName)
+    if self.bindings == nil then self:init_default_bindings() end
+    actionName = actionName or "未知"
+
+    if self.bindings[action] == nil then
+        self.bindings[action] = { action = action, bindedKey = keyCode, actionName = actionName }
+    else
+        for a, b in pairs(self.bindings) do
+            if a ~= action and b.bindedKey == keyCode then
+                local keyName = self.cs:GetKeyCodeName(keyCode)
+                local conflictName = b.actionName
+                UIManager.Instance:openPanelByName("TipPanel", function(panel)
+                    if panel == nil then return end
+                    LuaBinding.CallLua(panel, "show_tip",
+                        string.format("按键 %s 已被 %s 绑定！", keyName, conflictName))
+                    panel.transform.localPosition = Vector2(0, 430)
+                end)
+                return -- 拒绝绑定，避免冲突
+            end
+        end
+        self.bindings[action].bindedKey = keyCode
+    end
+end
+
+function KeyBindingManager:get_action_down(action)
+    local b = self.bindings and self.bindings[action]
+    if b == nil then return false end
+    return Input.GetKeyDown(b.bindedKey)
+end
+
+function KeyBindingManager:get_action(action)
+    local b = self.bindings and self.bindings[action]
+    if b == nil then return false end
+    return Input.GetKey(b.bindedKey)
+end
+
+function KeyBindingManager:get_binded_key(action)
+    local b = self.bindings and self.bindings[action]
+    if b == nil then return KeyCode.None end
+    return b.bindedKey
+end
+
+return function(cs)
+    return behaviour.new(cs, KeyBindingManager)
+end

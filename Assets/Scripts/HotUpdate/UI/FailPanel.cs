@@ -1,33 +1,12 @@
-using UnityEngine;
-using UnityEngine.UI;
+﻿using UnityEngine.UI;
 
-public class FailPanel : BasePanel
+/// <summary>
+/// 失败面板 —— 逻辑全部在 Lua：Assets/LuaScripts/ui/fail_panel.lua.txt
+/// C# 侧只保留预制体上的序列化字段 + luaModule 声明，预制体零改动
+/// </summary>
+public class FailPanel : LuaPanel
 {
     public Button backButton;
-    private PlayerStats playerStats;
 
-    private void Start()
-    {
-        backButton.onClick.AddListener(BackClick);
-        playerStats = GameObject.FindGameObjectWithTag("Player").GetComponent<PlayerStats>();
-        playerStats.CurrentHealth = playerStats.GetFinalMaxHealthValue();
-    }
-
-    private void BackClick()
-    {
-        SceneMgr.Instance.LoadSceneAsync("StartScene", () =>
-        {
-            MaskSystemManager.Instance.IsMaskSelected = false;
-            
-            UIManager.Instance.closePanel<FailPanel>();
-            UIManager.Instance.closePanel<PlayerProPanel>();
-        });
-    }
-
-    private void OnDestroy()
-    {
-        backButton.onClick.RemoveAllListeners();
-        playerStats = null;
-    }
-    
+    protected override string DefaultLuaModule => "fail_panel";
 }

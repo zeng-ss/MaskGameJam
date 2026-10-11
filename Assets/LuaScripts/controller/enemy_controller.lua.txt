@@ -1,0 +1,213 @@
+-- 近战敌人：先等 1 秒，再追击玩家；贴身后进入攻击动画，攻击动画命中帧开武器碰撞
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/EnemyController.cs
+--
+-- ⚠️ 过渡说明：GameManager 的敌人数值走扁平接口；
+--    WeaponController 已迁 Lua，这里通过 LuaBinding.CallLua 跨语言调用它的 start/stop_attack_hit。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local SoundAudioPool = CS.SoundAudioPool
+local GameManager = CS.GameManager
+local LuaBinding = CS.LuaBinding
+
+local EnemyController = {}
+
+local GRAVITY = -9.8
+local MOVE_DELAY = 1     -- 出生后等 1 秒才开始追玩家（原协程 WaitForSeconds(1f)）
+local ATTACK_RANGE = 2.5 -- 进入攻击的距离
+local ATTACK_BACK = 1    -- 攻击后重新开始追的距离阈值
+
+-- 死亡后按名字回收的池子（原 C# switch 里的四种）
+local RECYCLE_POOLS = {
+    Cow = true,
+    StarFish = true,
+    TurtleShell = true,
+    BlueSlime = true,
+}
+
+function EnemyController:awake()
+    self.characterController = self.cs:GetComponent(typeof(CS.UnityEngine.CharacterController))
+    self.animator = self.cs:GetComponent(typeof(CS.UnityEngine.Animator))
+    self.volecity = Vector3.zero
+end
+
+function EnemyController:start()
+    self:resolve_player()
+end
+
+function EnemyController:resolve_player()
+    -- SceneObjectManager 内部有缓存 + 有效性校验，玩家被销毁后会重新查找
+    self.player = CS.SceneObjectManager.Instance:GetObjectByTag("Player")
+end
+
+function EnemyController:onenable()
+    local cs = self.cs
+
+    self.characterController.enabled = true
+    if cs.sphereCollider ~= nil then
+        cs.sphereCollider.enabled = true
+    else
+        cs.capsuleCollider.enabled = true
+    end
+
+    self.isDead = false
+    self.isMoving = false
+    self.isAttacking = false
+    self.distance = 0
+    self.volecity = Vector3.zero
+
+    local enemyName = cs.gameObject.name
+    if not GameManager.Instance:HasEnemyConfig(enemyName) then
+        self.dataValid = false
+        return
+    end
+
+    self.dataValid = true
+    self.currentHealth = GameManager.Instance:GetEnemyHealth(enemyName)
+    self.moveSpeed = GameManager.Instance:GetEnemyMoveSpeed(enemyName)
+
+    -- 原 StartCoroutine(StartMoveToPlayer())：延时 1 秒后开始移动
+    self.moveDelayTimer = 0
+    self.waitingMove = true
+end
+
+function EnemyController:update()
+    if not self.dataValid then return end
+
+    local cs = self.cs
+    local cc = self.characterController
+
+    if cc.enabled then
+        cc:Move(self.volecity * Time.deltaTime)
+        self.isOnGround = cc.isGrounded
+        if self.isOnGround then
+            self.volecity.y = -2
+        else
+            self.volecity.y = self.volecity.y + GRAVITY * Time.deltaTime
+        end
+    end
+
+    -- 原协程逻辑：等 1 秒 → 播放移动动画、开始追击
+    if self.waitingMove then
+        self.moveDelayTimer = self.moveDelayTimer + Time.deltaTime
+        if self.moveDelayTimer >= MOVE_DELAY then
+            self.waitingMove = false
+            local player = self.player
+            if player ~= nil and LuaBinding.IsAlive(player) then
+                self.animator:SetBool("IsMove", true)
+                self.isMoving = true
+            end
+        end
+    end
+
+    local player = self.player
+    if player == nil or not LuaBinding.IsAlive(player) then return end
+
+    if self.isDead then
+        self:handle_death()
+        return
+    end
+
+    self.distance = Vector3.Distance(player.transform.position, cs.transform.position)
+
+    if self.isMoving then
+        self:handle_move()
+        return
+    end
+    if self.isAttacking then
+        self:handle_attack()
+    end
+end
+
+-- 死亡动画播完后按名字回收进池
+function EnemyController:handle_death()
+    self.isAttacking = false
+    self.isMoving = false
+    self.animator:SetBool("IsDie", true)
+
+    local stateInfo = self.animator:GetCurrentAnimatorStateInfo(0)
+    if stateInfo:IsName("Die") and stateInfo.normalizedTime >= 1 then
+        local name = self.cs.gameObject.name
+        if RECYCLE_POOLS[name] then
+            PoolMgr.Instance:PushObj(name, self.cs.gameObject)
+        end
+    end
+end
+
+function EnemyController:handle_move()
+    local cs = self.cs
+    local player = self.player
+
+    local direction = player.transform.position - cs.transform.position
+    direction.y = 0
+
+    -- 面向玩家（只绕 Y 轴）
+    local pp = player.transform.position
+    local sp = cs.transform.position
+    cs.transform:LookAt(Vector3(pp.x, sp.y, pp.z))
+
+    self.characterController:Move(direction.normalized * (self.moveSpeed * Time.deltaTime))
+
+    if self.distance <= ATTACK_RANGE then
+        self.isMoving = false
+        self.animator:SetBool("IsAttack", true)
+        self.isAttacking = true
+    end
+end
+
+function EnemyController:handle_attack()
+    local stateInfo = self.animator:GetCurrentAnimatorStateInfo(0)
+    if stateInfo:IsName("Attack") and stateInfo.normalizedTime >= 0.9 and self.distance > ATTACK_BACK then
+        self.isAttacking = false
+        self.isMoving = true
+        self.animator:SetBool("IsAttack", false)
+    end
+end
+
+-- 动画事件转发过来：打开武器碰撞
+function EnemyController:start_attack_hit()
+    local weapon = self.cs.weapon
+    if weapon ~= nil then
+        LuaBinding.CallLua(weapon, "start_attack_hit")
+    end
+end
+
+-- 动画事件转发过来：关闭武器碰撞
+function EnemyController:stop_attack_hit()
+    local weapon = self.cs.weapon
+    if weapon ~= nil then
+        LuaBinding.CallLua(weapon, "stop_attack_hit")
+    end
+end
+
+function EnemyController:decrease_health(amount)
+    self.currentHealth = (self.currentHealth or 0) - amount
+    if self.currentHealth > 0 then return end
+
+    local cs = self.cs
+    self.characterController.enabled = false
+    if cs.sphereCollider ~= nil then
+        cs.sphereCollider.enabled = false
+    else
+        cs.capsuleCollider.enabled = false
+    end
+
+    local pool = SoundAudioPool.Instance
+    if cs.gameObject.name == "Cow" then
+        pool:PlaySound(pool.cowDieClip, cs.transform.position)
+    else
+        pool:PlaySound(pool.enemyDieClip, cs.transform.position, 0.5)
+    end
+
+    self.isDead = true
+    self.isMoving = false
+    self.isAttacking = false
+end
+
+return function(cs)
+    return behaviour.new(cs, EnemyController)
+end

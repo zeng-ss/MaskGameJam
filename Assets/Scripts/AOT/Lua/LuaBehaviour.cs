@@ -7,7 +7,7 @@ using XLua;
 /// </summary>
 public class LuaBehaviour : MonoBehaviour
 {
-    [Tooltip("Lua 模块路径，对应 Assets/LuaScripts 下的 require 路径，例如 controller.enemy_controller")]
+    [Tooltip("Lua 模块名，对应 Addressables 地址（即文件名），例如 enemy_controller")]
     public string luaModule = "";
 
     protected LuaBinding _binding = new LuaBinding();

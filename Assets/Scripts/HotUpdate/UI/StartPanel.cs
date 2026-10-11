@@ -15,5 +15,5 @@ public class StartPanel : LuaPanel
     public Button exitBtn;
     public TMP_Text exitText;
 
-    protected override string DefaultLuaModule => "ui.start_panel";
+    protected override string DefaultLuaModule => "start_panel";
 }

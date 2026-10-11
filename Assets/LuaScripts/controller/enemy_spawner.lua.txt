@@ -1,0 +1,399 @@
+-- 无尽模式敌人波次管理器：按权重生成敌人、波次难度递进、下雨氛围
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/EnemySpawner.cs
+--
+-- 迁移要点：
+--   1. 原来「每 0.2 秒生成一个」用协程，这里是 update 驱动的状态机（pendingSpawnCount + 计时器）
+--   2. 遍历 enemyTypes / rains 走 C# 壳提供的下标接口（List<EnemyType> 在 Lua 侧访问不了）
+--   3. 敌人数值走 GameManager 新增的扁平接口
+--   4. UIManager.openPanel<T> 是泛型方法 → 用 openPanelByName("TimerPanel")
+--
+-- ⚠️ 过渡说明：MaskSelectUIManager / PatternSelectUIManager 属于第三批（XQL 层），
+--    目前仍是 C#，这里按 C# 方式调用即可。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Quaternion = UnityEngine.Quaternion
+local Input = UnityEngine.Input
+local KeyCode = UnityEngine.KeyCode
+local Mathf = UnityEngine.Mathf
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local ResMgr = CS.ResMgr
+local GameManager = CS.GameManager
+local UIManager = CS.UIManager
+local LuaBinding = CS.LuaBinding
+local LuaUtil = CS.LuaUtil
+local Tween = CS.LuaTween
+
+local EnemySpawner = {}
+
+-- 预加载表：{ 资源地址, 池子名, 数量 }
+-- 注意资源地址和池子名不总是一样（redWarnTip→RedWarn，YellowFireExplo→Explo）
+local PRELOAD_LIST = {
+    { "Cow",             "Cow",             30 },
+    { "redWarnTip",      "RedWarn",         30 },
+    { "YellowFireExplo", "Explo",           15 },
+    { "StarFish",        "StarFish",        30 },
+    { "BlueSlime",       "BlueSlime",       30 },
+    { "multiBullet",     "MultiBullet",     100 },
+    { "MultiRobot",      "MultiRobot",      30 },
+    { "BloodHitRed",     "HitPlayerBlood",  20 },
+    { "SingleBullet",    "SingleBullet",    100 },
+    { "TurtleShell",     "TurtleShell",     30 },
+    { "SingleRobot",     "SingleRobot",     30 },
+    { "PlayerBullet",    "PlayerBullet",    100 },
+    { "ParabolicBullet", "ParabolicBullet", 30 },
+}
+
+local BATCH_SPAWN_INTERVAL = 0.2 -- 同批次每个敌人之间的间隔（原协程里的 WaitForSeconds(0.2f)）
+local MAX_POS_RETRY = 50         -- 同批次位置重试上限
+
+function EnemySpawner:start()
+    -- MaskSelectUIManager / PatternSelectUIManager 是第三批（XQL 层）才迁，目前仍是 C#
+    local maskSelect = CS.MaskSelectUIManager.Instance
+    if maskSelect ~= nil then maskSelect:ShowMaskSelectPanel() end
+
+    self:resolve_player()
+
+    local cs = self.cs
+    self.currentWave = 1
+    self.currentBatchSize = cs.initBatchSize
+    self.currentMaxEnemies = cs.initMaxEnemies
+    self.currentSpawnInterval = cs.initSpawnInterval
+    self.isWaitingForClear = false
+    self.currentWaveSpawnedCount = 0
+    self.timer = 0
+    self.batchSpawnActive = false
+
+    -- 记录敌人初始权重（难度递增时会改 weight，重置时用 initWeight 还原）
+    for i = 0, cs:GetEnemyTypeCount() - 1 do
+        cs:SetEnemyInitWeight(i, cs:GetEnemyWeight(i))
+    end
+
+    self:preload_all_pools()
+
+    -- 打开倒计时面板（TimerPanel 逻辑已迁 Lua，跨语言调 start_countdown）
+    self:open_timer_panel()
+end
+
+function EnemySpawner:resolve_player()
+    -- SceneObjectManager 内部有缓存 + 有效性校验
+    self.player = CS.SceneObjectManager.Instance:GetObjectByTag("Player")
+end
+
+function EnemySpawner:update()
+    -- 玩家引用每帧校验（切场景后旧对象会被销毁，但 Lua 里的 userdata 仍是「非 nil」）
+    local player = self.player
+    if player == nil or not LuaBinding.IsAlive(player) then
+        self:resolve_player()
+        player = self.player
+    end
+    if player == nil then return end
+
+    -- 调试快捷键（与原 C# 一致）：空格秒杀近战敌人，V 秒杀机器人
+    if Input.GetKeyDown(KeyCode.Space) then self:kill_all(true) end
+    if Input.GetKeyDown(KeyCode.V) then self:kill_all(false) end
+
+    self:check_wave_clear()
+
+    -- 仅当「非等待清场」且「未生成完当前波次总量」时才计时生成
+    if not self.isWaitingForClear and self.currentWaveSpawnedCount < self.currentMaxEnemies then
+        self.timer = self.timer + Time.deltaTime
+        if self.timer >= self.currentSpawnInterval then
+            self:spawn_enemy_batch()
+            self.timer = 0
+        end
+    end
+
+    self:update_spawn_batch()
+end
+
+-- 调试：清掉场上所有敌人（isRanged=false 时只打近战敌人，true 时只打近战敌人）
+function EnemySpawner:kill_all(meleeOnly)
+    local enemys = UnityEngine.GameObject.FindGameObjectsWithTag("Enemy")
+    for i = 0, enemys.Length - 1 do
+        local go = enemys[i]
+        if meleeOnly then
+            local ec = go:GetComponent(typeof(CS.EnemyController))
+            if ec ~= nil then LuaBinding.CallLua(ec, "decrease_health", 100) end
+        else
+            if go:GetComponent(typeof(CS.EnemyController)) == nil then
+                local rc = go:GetComponent(typeof(CS.RobotController))
+                if rc ~= nil then LuaBinding.CallLua(rc, "decrease_health", 100) end
+            end
+        end
+    end
+end
+
+-- ---------------- 波次检测与难度升级 ----------------
+
+function EnemySpawner:check_wave_clear()
+    local currentEnemyCount = UnityEngine.GameObject.FindGameObjectsWithTag("Enemy").Length
+
+    -- 本波已全部生成完毕，且场上清空 → 升级波次
+    if self.isWaitingForClear and currentEnemyCount == 0 then
+        self:upgrade_wave()
+        return
+    end
+
+    -- 本波未生成完但已达上限 → 标记等待清场
+    if not self.isWaitingForClear and self.currentWaveSpawnedCount >= self.currentMaxEnemies then
+        self.isWaitingForClear = true
+    end
+end
+
+function EnemySpawner:upgrade_wave()
+    local cs = self.cs
+
+    self.currentWave = self.currentWave + 1
+    local patternSelect = CS.PatternSelectUIManager.Instance
+    if patternSelect ~= nil then patternSelect:OnWaveEnemyDestroyed() end
+    self:random_start_rain()
+
+    -- 难度递进：最大敌人数 ↑、生成间隔 ↓（不低于下限）
+    self.currentMaxEnemies = self.currentMaxEnemies + cs.waveAddMaxEnemies
+    self.currentSpawnInterval = Mathf.Max(self.currentSpawnInterval - cs.waveReduceInterval, cs.minSpawnInterval)
+
+    self:open_timer_panel()
+
+    -- 难度递进：全局提升敌人属性（原来遍历 RuntimeEnemyConfigDict，逻辑收进 GameManager）
+    GameManager.Instance:ApplyDifficultyUpgrade(10)
+
+    -- 难度递进：高权重敌人权重 ↑
+    self:upgrade_high_weight_enemy()
+
+    -- 重置状态
+    self.isWaitingForClear = false
+    self.currentWaveSpawnedCount = 0
+    self.timer = 0
+
+    -- 刷新属性面板上的波次文本
+    local panel = UIManager.Instance:getPanelByName("PlayerProPanel")
+    if panel ~= nil then
+        local luaPanel = LuaBinding.GetLuaInstance(panel)
+        if luaPanel ~= nil then
+            luaPanel:set_wave_text(string.format("当前波次：%d——敌人数量：%d",
+                math.floor(self.currentWave), math.floor(self.currentMaxEnemies)))
+        end
+    end
+end
+
+function EnemySpawner:upgrade_high_weight_enemy()
+    local cs = self.cs
+    -- 原 C# 用 LINQ Where + break：只给第一个命中的高权重敌人加权重
+    for i = 0, cs:GetEnemyTypeCount() - 1 do
+        if cs:IsHighWeightName(cs:GetEnemyPrefabName(i)) then
+            cs:SetEnemyWeight(i, cs:GetEnemyWeight(i) + cs.waveAddHighWeight)
+            break
+        end
+    end
+end
+
+-- 打开（或复用）倒计时面板并重新计时
+function EnemySpawner:open_timer_panel()
+    local interval = self.currentSpawnInterval
+    UIManager.Instance:openPanelByName("TimerPanel", function(panel)
+        if panel == nil then return end
+        LuaBinding.CallLua(panel, "start_countdown", interval)
+        Tween.LocalMoveY(panel.transform, 112, 0.3, CS.DG.Tweening.Ease.OutBack)
+    end)
+end
+
+-- ---------------- 生成敌人 ----------------
+
+function EnemySpawner:spawn_enemy_batch()
+    -- 本次能生成的数量 = min(单批数量, 剩余可生成数)
+    local remainToSpawn = self.currentMaxEnemies - self.currentWaveSpawnedCount
+    local canSpawnCount = math.min(self.currentBatchSize, remainToSpawn)
+    if canSpawnCount <= 0 then return end
+
+    -- 启动批次状态机（代替原来的协程）
+    self.pendingSpawnCount = canSpawnCount
+    self.batchSpawnPos = {}
+    self.batchSpawnTimer = 0
+    self.batchSpawnActive = true
+end
+
+-- 协程替代：每次 update 检查间隔，到点就生成一个
+function EnemySpawner:update_spawn_batch()
+    if not self.batchSpawnActive then return end
+
+    self.batchSpawnTimer = self.batchSpawnTimer - Time.deltaTime
+    if self.batchSpawnTimer > 0 then return end
+
+    self:spawn_one_enemy()
+    self.pendingSpawnCount = self.pendingSpawnCount - 1
+
+    if self.pendingSpawnCount <= 0 then
+        -- 结束（原协程最后一个敌人不需要等待）
+        self.batchSpawnActive = false
+        self.batchSpawnPos = nil
+        return
+    end
+
+    self.batchSpawnTimer = BATCH_SPAWN_INTERVAL
+end
+
+function EnemySpawner:spawn_one_enemy()
+    local enemyToSpawn = self:get_random_enemy_by_weight()
+    if enemyToSpawn == nil or enemyToSpawn == "" then
+        UnityEngine.Debug.LogWarning("未找到有效敌人类型！")
+        return -- 原协程里这种情况也会间隔 0.2 秒，状态机天然如此
+    end
+
+    local spawnPos = self:get_random_spawn_pos_for_batch(self.batchSpawnPos)
+    table.insert(self.batchSpawnPos, spawnPos)
+
+    local enemy = PoolMgr.Instance:GetObj(enemyToSpawn)
+    if enemy ~= nil then
+        enemy.name = enemyToSpawn
+        enemy.transform.position = spawnPos
+        enemy.transform.rotation = Quaternion.identity
+        self.currentWaveSpawnedCount = self.currentWaveSpawnedCount + 1
+    else
+        UnityEngine.Debug.LogWarning("对象池未找到：" .. enemyToSpawn .. "，请检查预加载和预制体路径")
+    end
+end
+
+-- 按权重随机选敌人类型
+function EnemySpawner:get_random_enemy_by_weight()
+    local cs = self.cs
+    local count = cs:GetEnemyTypeCount()
+    if count == 0 then
+        UnityEngine.Debug.LogError("敌人类型列表为空！")
+        return ""
+    end
+
+    local totalWeight = 0
+    for i = 0, count - 1 do
+        totalWeight = totalWeight + cs:GetEnemyWeight(i)
+    end
+
+    if totalWeight <= 0 then
+        UnityEngine.Debug.LogWarning("敌人总权重为0，返回第一个类型")
+        return cs:GetEnemyPrefabName(0)
+    end
+
+    local randomValue = LuaUtil.RangeInt(0, totalWeight)
+    local currentWeight = 0
+    for i = 0, count - 1 do
+        currentWeight = currentWeight + cs:GetEnemyWeight(i)
+        if randomValue < currentWeight then
+            return cs:GetEnemyPrefabName(i)
+        end
+    end
+    return cs:GetEnemyPrefabName(0)
+end
+
+-- 为本次批量取一个随机位置（只和本批次已定位置保持最小间距）
+function EnemySpawner:get_random_spawn_pos_for_batch(batchPosList)
+    local cs = self.cs
+    local validPos = Vector3.zero
+    local retryCount = 0
+
+    while retryCount < MAX_POS_RETRY do
+        local randomDir = LuaUtil.OnUnitSphere()
+        randomDir.y = 0 -- 固定 Y 轴，保持水平平面
+        randomDir = randomDir.normalized
+
+        local randomDistance = LuaUtil.Range(cs.spawnRadius * 0.1, cs.spawnRadius)
+        validPos = Vector3.zero + randomDir * randomDistance
+
+        local isPosValid = true
+        for k = 1, #batchPosList do
+            if Vector3.Distance(validPos, batchPosList[k]) < cs.minEnemyDistance then
+                isPosValid = false
+                break
+            end
+        end
+
+        if isPosValid then break end
+        retryCount = retryCount + 1
+    end
+
+    if retryCount >= MAX_POS_RETRY then
+        UnityEngine.Debug.LogWarning(
+            string.format("同批次生成位置重试%d次，使用最后生成的位置（可能间距不足）", MAX_POS_RETRY))
+    end
+
+    return validPos
+end
+
+-- ---------------- 下雨效果 ----------------
+
+function EnemySpawner:random_start_rain()
+    local cs = self.cs
+    local randomValue = LuaUtil.Value01()
+
+    if randomValue <= 0.5 then
+        if self.isRain then return end
+        for i = 0, cs:GetRainCount() - 1 do
+            cs:GetRain(i):SetActive(true)
+        end
+        Tween.LightIntensity(cs.enviormentLight, 0, 5)
+        Tween.LightIntensity(cs.playerLight, 10, 5)
+        self.isRain = true
+    else
+        for i = 0, cs:GetRainCount() - 1 do
+            cs:GetRain(i):SetActive(false)
+        end
+        self.isRain = false
+        Tween.LightIntensity(cs.enviormentLight, 1, 5)
+        Tween.LightIntensity(cs.playerLight, 0, 5)
+    end
+end
+
+-- ---------------- 预加载对象池 ----------------
+
+function EnemySpawner:preload_all_pools()
+    PoolMgr.Instance:Clear()
+    for i = 1, #PRELOAD_LIST do
+        local item = PRELOAD_LIST[i]
+        self:preload_enemy(item[1], item[2], item[3])
+    end
+end
+
+function EnemySpawner:preload_enemy(resPath, poolName, count)
+    for _ = 1, count do
+        ResMgr.Instance:LoadAndInstantiateAsync(resPath, nil, function(obj)
+            if obj ~= nil then
+                obj.name = poolName
+                PoolMgr.Instance:PushObj(poolName, obj)
+            else
+                UnityEngine.Debug.LogWarning("预加载失败：" .. resPath .. " 不存在！")
+            end
+        end)
+    end
+end
+
+-- ---------------- 外部接口 ----------------
+
+function EnemySpawner:get_current_wave()
+    return self.currentWave or 1
+end
+
+function EnemySpawner:reset_endless_mode()
+    local cs = self.cs
+
+    self.currentWave = 1
+    self.currentBatchSize = cs.initBatchSize
+    self.currentMaxEnemies = cs.initMaxEnemies
+    self.currentSpawnInterval = cs.initSpawnInterval
+    self.isWaitingForClear = false
+    self.currentWaveSpawnedCount = 0
+    self.timer = 0
+    self.batchSpawnActive = false
+
+    -- 敌人权重还原为初始值
+    for i = 0, cs:GetEnemyTypeCount() - 1 do
+        cs:SetEnemyWeight(i, cs:GetEnemyInitWeight(i))
+    end
+
+    UnityEngine.Debug.Log(string.format("【无尽模式】已重置！第%d波开始", math.floor(self.currentWave)))
+end
+
+return function(cs)
+    return behaviour.new(cs, EnemySpawner)
+end

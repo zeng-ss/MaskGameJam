@@ -1,0 +1,65 @@
+-- Lua 侧事件中心
+--
+-- 为什么不用 C# 的 EventCenter：它的 AddEventListener / EventTrigger 全是泛型方法，
+-- xLua 调不了泛型；而且迁移后事件的触发方和监听方都在 Lua 里，用 Lua 自己的事件中心更简单。
+-- （C# 侧仍在用的事件是「进度条加载」「光标出现/消失」，触发方在 SceneMgr / UIManager，
+--   目前没有 Lua 监听方，所以不需要跨语言桥接。）
+--
+-- 用法：
+--   local event = require 'event'
+--   local function onStatsChanged(stats) ... end
+--   event.on('player_stats_changed', onStatsChanged)   -- 监听
+--   event.emit('player_stats_changed', self)           -- 触发
+--   event.off('player_stats_changed', onStatsChanged)  -- 移除（不传 fn 表示清空该事件）
+
+local M = {}
+
+local handlers = {}
+
+function M.on(name, fn)
+    if fn == nil then return end
+    local list = handlers[name]
+    if list == nil then
+        list = {}
+        handlers[name] = list
+    end
+    list[#list + 1] = fn
+end
+
+function M.off(name, fn)
+    local list = handlers[name]
+    if list == nil then return end
+
+    if fn == nil then
+        handlers[name] = nil
+        return
+    end
+
+    for i = #list, 1, -1 do
+        if list[i] == fn then
+            table.remove(list, i)
+        end
+    end
+end
+
+function M.emit(name, ...)
+    local list = handlers[name]
+    if list == nil then return end
+
+    -- 先快照：回调里可能增删监听，直接遍历原表会错乱
+    local snapshot = {}
+    for i = 1, #list do snapshot[i] = list[i] end
+
+    for i = 1, #snapshot do
+        local ok, err = pcall(snapshot[i], ...)
+        if not ok then
+            CS.UnityEngine.Debug.LogError("[event] " .. tostring(name) .. " 回调执行出错: " .. tostring(err))
+        end
+    end
+end
+
+function M.clear()
+    handlers = {}
+end
+
+return M

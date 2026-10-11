@@ -1,0 +1,51 @@
+-- 自动生成 NavMesh 寻路路径并画到 LineRenderer
+-- 对应 C# Assets/Scripts/HotUpdate/Controller/AutoGenerateNavPath.cs
+--
+-- NavMesh / NavMeshPath 都在 UnityEngine.AI 命名空间下，Lua 里用 CS.UnityEngine.AI.* 访问。
+-- NavMesh.AllAreas 是 const int = -1，const 在 Lua 侧取不到，直接写字面量。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local NavMesh = UnityEngine.AI.NavMesh
+local NavMeshPath = UnityEngine.AI.NavMeshPath
+local LineRendererType = UnityEngine.LineRenderer
+
+local AutoGenerateNavPath = {}
+
+local ALL_AREAS = -1 -- NavMesh.AllAreas
+
+function AutoGenerateNavPath:awake()
+    self.lineRenderer = self.cs:GetComponent(typeof(LineRendererType))
+    self.lineRenderer.widthMultiplier = self.cs.lineWidth
+    self.lineRenderer.positionCount = 0 -- 初始隐藏
+end
+
+function AutoGenerateNavPath:update()
+    local cs = self.cs
+    -- 每帧自动更新路径（起点/终点移动时路径自动刷新）
+    if cs.isStart and cs.startTarget ~= nil and cs.endTarget ~= nil then
+        self:generate_auto_nav_path(cs.startTarget.position, cs.endTarget.position)
+    end
+end
+
+function AutoGenerateNavPath:generate_auto_nav_path(startPos, endPos)
+    local navPath = NavMeshPath()
+    local isPathValid = NavMesh.CalculatePath(startPos, endPos, ALL_AREAS, navPath)
+
+    local corners = navPath.corners
+    if isPathValid and corners.Length >= 2 then
+        self.lineRenderer.positionCount = corners.Length
+        for i = 0, corners.Length - 1 do
+            -- 世界坐标转成路径对象自身的本地坐标（解决偏移问题）
+            local localPoint = self.cs.transform:InverseTransformPoint(corners[i])
+            self.lineRenderer:SetPosition(i, localPoint)
+        end
+    else
+        self.lineRenderer.positionCount = 0 -- 路径无效则隐藏
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, AutoGenerateNavPath)
+end

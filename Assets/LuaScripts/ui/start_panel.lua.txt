@@ -1,7 +1,7 @@
 -- 开始面板逻辑（对应 C# Assets/Scripts/HotUpdate/UI/StartPanel.cs）
 -- 序列化字段通过 self.cs.xxx 访问
 
-local behaviour = require 'framework.behaviour'
+local behaviour = require 'behaviour'
 
 local UnityEngine = CS.UnityEngine
 local Application = UnityEngine.Application
@@ -50,8 +50,8 @@ function StartPanel:onStartClick()
     CS.UIManager.Instance:openPanelByName("TipPanel", function(panel)
         -- panel 是 C# 的 BasePanel，反查它的 Lua 实例再调用 Lua 方法
         local luaPanel = CS.LuaBinding.GetLuaInstance(panel)
-        if luaPanel ~= nil and luaPanel.ShowTip ~= nil then
-            luaPanel:ShowTip("敬请期待....")
+        if luaPanel ~= nil and luaPanel.show_tip ~= nil then
+            luaPanel:show_tip("敬请期待....")
         else
             UnityEngine.Debug.LogWarning("[lua] TipPanel 的 Lua 实例不可用，请确认 TipPanel 已迁移到 Lua")
         end

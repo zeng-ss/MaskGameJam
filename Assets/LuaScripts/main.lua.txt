@@ -8,8 +8,8 @@ local UnityEngine = CS.UnityEngine
 
 UnityEngine.Debug.Log("[lua] hello from lua, unityVersion = " .. UnityEngine.Application.unityVersion)
 
--- 演示 require 子模块：require "demo.greet" -> 地址 lua/demo/greet.lua
-local greet = require 'demo.greet'
+-- 演示 require 子模块：Addressables 地址就是文件名，所以直接 require 'greet'
+local greet = require 'greet'
 greet.say("xLua")
 
 -- 供 C# 侧回调的入口函数

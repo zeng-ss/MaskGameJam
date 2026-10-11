@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using XLua;
 
 /// <summary>
@@ -7,10 +7,10 @@ using XLua;
 /// </summary>
 public class LuaPanel : BasePanel
 {
-    [Tooltip("Lua 模块路径，对应 Assets/LuaScripts 下的 require 路径，例如 ui.start_panel")]
+    [Tooltip("Lua 模块名，对应 Addressables 地址（即文件名），例如 start_panel")]
     public string luaModule = "";
 
-    protected LuaBinding _binding = new LuaBinding();
+    private readonly LuaBinding _binding = new LuaBinding();
 
     public LuaTable LuaInstance => _binding.LuaInstance;
 
@@ -38,6 +38,21 @@ public class LuaPanel : BasePanel
     }
 
     protected virtual void OnDisable() => _binding.OnDisable();
+
+    /// <summary>
+    /// 面板显示/隐藏时同步通知 Lua（由 UIManager 调用） Lua 侧写对应的 show / hide 函数即可拿到钩子
+    /// </summary>
+    public override void Show()
+    {
+        base.Show();
+        _binding.Show();
+    }
+
+    public override void Hide()
+    {
+        base.Hide();
+        _binding.Hide();
+    }
 
     protected virtual void OnDestroy()
     {
