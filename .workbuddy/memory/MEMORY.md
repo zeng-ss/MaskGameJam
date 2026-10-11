@@ -205,9 +205,31 @@ public static Func<MemberInfo, bool> MethodFilter = (memberInfo) =>
 - 配套加固：`EnemySpawner:start` 里的对象池预加载包了 `pcall`，
   避免「某个敌人预制体缺组件」连带把后面的倒计时面板一起吞掉（异常只记一条 error）。
 
-**进度**：第 1 批（基础设施 + UI 层 5 个面板）✅ 2026-10-11，运行时两个坑已修并验证通过；
-**第 2 批 Controller 层 13 个 ✅ 2026-10-11**（`SoundAudioPool` 判定为服务层，保留 C#），待用户验证；
-之后是第 3 批 XQL 10 个 + 数据/枚举类。
+**第 3 批（XQL 层 10 个 + GameLanuch）的新增手法**：
+- **Inspector 序列化的数据类一律保留 C#**：`MaskFaction` / `BuffType` 枚举、
+  `BuffData` / `PatternData` / `MaskData`。它们在 Inspector 里配好、被 `List<T>` 序列化，
+  搬进 Lua 等于把配置丢掉。→ 壳保留数据 + **扁平下标接口**给 Lua 读：
+  `GetMaskDataCount/GetMaskDataFaction(i)/GetPatternBuffValue(i,j)/GetRandomBuffType(i)` …
+- **跨语言不传对象引用，传下标**：`MaskSystemManager:unlock_pattern_selection()` 返回
+  3 个「在 allPatternDatas 里的下标」，UI 用下标反查名字/描述。比传 `List<PatternData>` 稳得多。
+- **单例基类冲突的第二次出现**：`MaskSystemManager` 原继承 `UnitySingleTonMono<T>`，
+  改 `LuaBehaviour` 后在壳里自实现 `Instance`（+ `DontDestroyOnLoad`），与 `KeyBindingManager` 同款处理。
+- **「单一真相源」放进 C# 属性**：`IsMaskSelected` 保持在壳上（Lua 读写的都是它），
+  避免 Lua 表和 C# 字段各存一份导致状态分裂。
+- **`UnityAction<float>` 不赌 Lua 委托注册**：Slider 回调由壳创建 `UnityAction<float>` 并保存引用
+  （`TopDownCameraFollow.BindSliderValueChanged/Unbind…`），Lua 只传 Slider 对象。
+- **`OnDrawGizmosSelected` 留在壳里**（Lua 画不了编辑器辅助图形）。
+- **Lua 之间不再用 C# 委托**：`PlayerModle` 的 `footStepAction`/`rootMotionAction`（原 `Action`）
+  改成 Lua function 字段，`set_foot_step_handler/set_root_motion_handler`。
+- **数据结构改动的连带同步**：迁完后要回头改前两批 Lua 里对被迁类的调用
+  （`stats:GetFinalMaxHealthValue()` → `statsLua:get_final_max_health_value()`、`player:TakeDamage` → `playerLua:take_damage`）。
+  排查手法：`grep -rn "旧方法名" Assets/LuaScripts/`。
+
+**进度：全部完成 ✅ 2026-10-11**
+- 第 1 批：基础设施 + UI 层 6 个面板（已验证）
+- 第 2 批：Controller 层 13 个（`SoundAudioPool` 判定为服务层保留 C#，已验证）
+- 第 3 批：XQL 层 10 个 + `GameLanuch`；数据/枚举类保留 C#
+- 结果：`Assets/Scripts/HotUpdate/` 下**只剩 `SoundAudioPool`** 一个直继承 `MonoBehaviour` 的类
 
 ### Lua 热更管线约定
 - 脚本源目录：`Assets/LuaScripts/`，**后缀必须是 `.lua.txt`**（否则 Unity 不识别为 TextAsset）。

@@ -14,12 +14,15 @@ function FailPanel:start()
     local cs = self.cs
     cs.backButton.onClick:AddListener(function() self:back_click() end)
 
-    -- 进面板先把玩家血量回满
+    -- 进面板先把玩家血量回满（PlayerStats 的逻辑也已在 Lua）
     local playerGo = CS.UnityEngine.GameObject.FindGameObjectWithTag("Player")
     if playerGo ~= nil then
         local stats = playerGo:GetComponent(typeof(CS.PlayerStats))
-        if stats ~= nil then
-            stats.CurrentHealth = stats:GetFinalMaxHealthValue()
+        if CS.LuaBinding.IsAlive(stats) then
+            local statsLua = CS.LuaBinding.GetLuaInstance(stats)
+            if statsLua ~= nil then
+                stats.CurrentHealth = statsLua:get_final_max_health_value()
+            end
         end
     end
 end

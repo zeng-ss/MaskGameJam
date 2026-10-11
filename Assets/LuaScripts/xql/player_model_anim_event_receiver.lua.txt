@@ -1,0 +1,95 @@
+-- 动画事件接收转发器：把动画事件转给 PlayerController（Lua），并播放音效
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/PlayerModelAnimEventReceiver.cs
+--
+-- ⚠️ 本文件里的方法名由**动画事件**调用（在壳上保持不变），这里是 Lua 侧的实现。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local LuaBinding = CS.LuaBinding
+
+local PlayerModelAnimEventReceiver = {}
+
+function PlayerModelAnimEventReceiver:awake()
+    local cs = self.cs
+
+    -- 校验并自动查找 PlayerController
+    if not LuaBinding.IsAlive(cs.playerController) then
+        UnityEngine.Debug.LogWarning(
+            "PlayerModle未关联PlayerController！请将Player根节点拖拽到playerController字段中。")
+        cs.playerController = UnityEngine.Object.FindFirstObjectByType(typeof(CS.PlayerController))
+    end
+
+    -- 初始化音频源（没有就自动添加）
+    local audio = cs:GetComponent(typeof(CS.UnityEngine.AudioSource))
+    if not LuaBinding.IsAlive(audio) then
+        audio = cs.gameObject:AddComponent(typeof(CS.UnityEngine.AudioSource))
+    end
+    self.audioSource = audio
+    audio.volume = cs.audioVolume
+    audio.loop = false       -- 默认不循环，脚步声单独设置
+    audio.playOnAwake = false
+end
+
+-- 转发给 PlayerController 的 Lua 实例（两边都是 Lua，直接用实例调用）
+local function call_controller(self, method)
+    local pc = self.cs.playerController
+    if LuaBinding.IsAlive(pc) then
+        LuaBinding.CallLua(pc, method)
+    end
+end
+
+-- ---------------- 普通射击 ----------------
+
+function PlayerModelAnimEventReceiver:on_normal_shoot_anim_event()
+    call_controller(self, "on_normal_shoot_anim_event")
+    self:play_shoot_audio()
+end
+
+function PlayerModelAnimEventReceiver:on_normal_shoot_end_anim_event()
+    call_controller(self, "on_normal_shoot_end_anim_event")
+end
+
+-- ---------------- 散射射击 ----------------
+
+function PlayerModelAnimEventReceiver:on_burst_shoot_anim_event()
+    call_controller(self, "on_burst_shoot_anim_event")
+    self:play_shoot_audio()
+end
+
+function PlayerModelAnimEventReceiver:on_burst_shoot_end_anim_event()
+    call_controller(self, "on_burst_shoot_end_anim_event")
+end
+
+-- ---------------- 奔跑脚步声 ----------------
+
+function PlayerModelAnimEventReceiver:on_run_step_start()
+    local cs = self.cs
+    if not LuaBinding.IsAlive(cs.runStepAudioClip) or self.isPlayingStepSound then return end
+
+    self.audioSource.loop = true
+    self.audioSource.clip = cs.runStepAudioClip
+    self.audioSource:Play()
+    self.isPlayingStepSound = true
+end
+
+function PlayerModelAnimEventReceiver:on_run_step_end()
+    if not self.isPlayingStepSound then return end
+
+    self.audioSource:Stop()
+    self.audioSource.loop = false -- 恢复默认不循环
+    self.isPlayingStepSound = false
+end
+
+-- ---------------- 工具 ----------------
+
+-- 射击音效（用 PlayOneShot 支持连射重叠）
+function PlayerModelAnimEventReceiver:play_shoot_audio()
+    local cs = self.cs
+    if not LuaBinding.IsAlive(cs.shootAudioClip) then return end
+    self.audioSource:PlayOneShot(cs.shootAudioClip, cs.audioVolume)
+end
+
+return function(cs)
+    return behaviour.new(cs, PlayerModelAnimEventReceiver)
+end

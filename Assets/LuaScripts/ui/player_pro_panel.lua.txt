@@ -14,6 +14,7 @@ local UnityEngine = CS.UnityEngine
 local Time = UnityEngine.Time
 local Mathf = UnityEngine.Mathf
 local SoundAudioPool = CS.SoundAudioPool
+local LuaBinding = CS.LuaBinding
 
 local PlayerProPanel = {}
 
@@ -47,9 +48,9 @@ function PlayerProPanel:ondisable()
     if cs.changeShootBtn ~= nil then cs.changeShootBtn.onClick:RemoveAllListeners() end
 end
 
--- 取玩家属性组件（PlayerStats 当前仍是 C#）
+-- 取玩家属性组件（PlayerStats 的逻辑也已在 Lua）
 function PlayerProPanel:resolve_player_stats()
-    local go = UnityEngine.GameObject.FindGameObjectWithTag("Player")
+    local go = CS.SceneObjectManager.Instance:GetObjectByTag("Player")
     local stats = (go ~= nil) and go:GetComponent(typeof(CS.PlayerStats)) or nil
 
     if stats ~= self.playerStats then
@@ -66,7 +67,7 @@ end
 --    所以缓存的玩家引用每帧都要用 IsAlive 校验，死了就重新找。
 function PlayerProPanel:ensure_player_stats()
     local stats = self.playerStats
-    if stats == nil or not CS.LuaBinding.IsAlive(stats) then
+    if stats == nil or not LuaBinding.IsAlive(stats) then
         self:resolve_player_stats()
         stats = self.playerStats
     end
@@ -76,13 +77,17 @@ end
 function PlayerProPanel:update()
     local cs = self.cs
     local stats = self:ensure_player_stats()
-    if stats == nil or cs.healthImage == nil then return end
+    if not LuaBinding.IsAlive(stats) or not LuaBinding.IsAlive(cs.healthImage) then return end
 
-    local maxHealth = stats:GetFinalMaxHealthValue()
+    -- PlayerStats 的逻辑也在 Lua，取它的实例表直接调用（避免每帧跨语言往返）
+    local statsLua = LuaBinding.GetLuaInstance(stats)
+    if statsLua == nil then return end
+
+    local maxHealth = statsLua:get_final_max_health_value()
 
     -- 首次进入：把血量初始化满，并让下面的文本比较能触发一次刷新
     if not self.isInitPlayerHealth then
-        self.currentMaxHealth = maxHealth
+        cs.currentMaxHealth = maxHealth -- 写回 C# 字段（MaskSystemManager 会读它）
         stats.CurrentHealth = maxHealth
         self.isInitPlayerHealth = true
 
@@ -95,9 +100,9 @@ function PlayerProPanel:update()
     cs.healthImage.fillAmount = Mathf.MoveTowards(cs.healthImage.fillAmount, target, Time.deltaTime * 0.5)
 
     -- 属性文本：检测到变化才刷新
-    local dmg = stats:GetFinalAttackDamage()
-    local spd = stats:GetFinalMoveSpeed()
-    local rate = stats:GetFinalShootRate()
+    local dmg = statsLua:get_final_attack_damage()
+    local spd = statsLua:get_final_move_speed()
+    local rate = statsLua:get_final_shoot_rate()
     if dmg ~= self.lastDamage or maxHealth ~= self.lastMaxHealth
         or spd ~= self.lastMoveSpeed or rate ~= self.lastShootRate then
 

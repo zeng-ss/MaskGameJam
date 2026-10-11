@@ -1,0 +1,23 @@
+-- 游戏启动器：加载主场景 + 释放自己
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/GameLanuch.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Addressables = UnityEngine.AddressableAssets.Addressables
+
+local GameLanuch = {}
+
+function GameLanuch:awake()
+    UnityEngine.Debug.Log("游戏开始,主流程开始ssssssssssssssss")
+
+    -- 1. 异步加载游戏主场景（"StartScene" 是 Addressables 里的场景地址）
+    CS.SceneMgr.Instance:LoadSceneAsync("StartScene")
+
+    -- 2. 启动器任务完成，释放自己
+    Addressables.ReleaseInstance(self.cs.gameObject)
+end
+
+return function(cs)
+    return behaviour.new(cs, GameLanuch)
+end

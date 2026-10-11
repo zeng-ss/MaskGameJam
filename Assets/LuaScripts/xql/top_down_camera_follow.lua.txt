@@ -1,0 +1,140 @@
+-- 俯视角摄像机跟随：跟随玩家 + Slider/滚轮调高度 + 边界限制 + 平滑过渡
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/TopDownCameraFollow.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Vector2 = UnityEngine.Vector2
+local Quaternion = UnityEngine.Quaternion
+local Mathf = UnityEngine.Mathf
+local Input = UnityEngine.Input
+local Application = UnityEngine.Application
+local Time = UnityEngine.Time
+local LuaBinding = CS.LuaBinding
+
+local TopDownCameraFollow = {}
+
+function TopDownCameraFollow:awake()
+    local cs = self.cs
+
+    if not LuaBinding.IsAlive(cs.playerTarget) then
+        UnityEngine.Debug.LogError("未指定玩家目标！请拖拽Player根节点到playerTarget字段！")
+        cs.enabled = false
+        return
+    end
+
+    self.targetHeight = cs.transform.position.y   -- 目标高度（带平滑）
+    self.targetFollowPos = self:get_limit_follow_pos()
+    self.isSliderInit = false
+end
+
+function TopDownCameraFollow:lateupdate()
+    -- awake 里 playerTarget 校验失败时不会再往下走
+    if self.targetHeight == nil then return end
+
+    local cs = self.cs
+
+    -- 面板引用（PlayerProPanel 逻辑在 Lua，取它的 C# 组件再反查）
+    if not LuaBinding.IsAlive(self.playerProPanel) then
+        self.playerProPanel = CS.UIManager.Instance:getPanelByName("PlayerProPanel")
+        return
+    end
+
+    if not self.isSliderInit then self:init_camera_height_slider() end
+    if not LuaBinding.IsAlive(cs.playerTarget) then return end
+
+    self:handle_height_input()
+    self.targetFollowPos = self:get_limit_follow_pos()
+    self:smooth_update_camera_pos()
+    self:sync_slider_with_target_height()
+end
+
+function TopDownCameraFollow:init_camera_height_slider()
+    local slider = self.playerProPanel.cameraHeightSlider
+    if not LuaBinding.IsAlive(slider) then
+        UnityEngine.Debug.LogWarning("未绑定高度调节Slider！手机端无法调节摄像机高度")
+        self.isSliderInit = false
+        return
+    end
+
+    slider.minValue = 0
+    slider.maxValue = 1
+    slider.value = self:map_height_to_slider_value(self.targetHeight)
+
+    -- 回调交给 C# 壳创建 UnityAction 再转发（避免依赖 UnityAction<float> 的委托注册）
+    self.cs:BindSliderValueChanged(slider)
+    self.isSliderInit = true
+end
+
+-- 滑动条数值变化（手机端拖动时触发）
+function TopDownCameraFollow:on_slider_value_changed(sliderValue)
+    local cs = self.cs
+    self.targetHeight = Mathf.Lerp(cs.minCameraHeight, cs.maxCameraHeight, sliderValue)
+    self.targetHeight = Mathf.Clamp(self.targetHeight, cs.minCameraHeight, cs.maxCameraHeight)
+end
+
+-- 高度值转滑动条值（min→0，max→1）
+function TopDownCameraFollow:map_height_to_slider_value(height)
+    local cs = self.cs
+    return Mathf.InverseLerp(cs.minCameraHeight, cs.maxCameraHeight, height)
+end
+
+-- 手机端由 Slider 事件处理，这里只管 PC 滚轮
+function TopDownCameraFollow:handle_height_input()
+    local cs = self.cs
+    if not cs.keepScrollWheelForPC then return end
+    if not (Application.isEditor or not Application.isMobilePlatform) then return end
+
+    local scrollValue = Input.GetAxis("Mouse ScrollWheel")
+    if Mathf.Abs(scrollValue) > 0.001 then
+        self.targetHeight = self.targetHeight + scrollValue * cs.scrollHeightSensitivity * 10
+        self.targetHeight = Mathf.Clamp(self.targetHeight, cs.minCameraHeight, cs.maxCameraHeight)
+    end
+end
+
+-- 双向同步：防止高度被代码改过之后 Slider 显示不同步
+function TopDownCameraFollow:sync_slider_with_target_height()
+    if not self.isSliderInit then return end
+    local slider = self.playerProPanel.cameraHeightSlider
+    if not LuaBinding.IsAlive(slider) then return end
+
+    local targetSliderValue = self:map_height_to_slider_value(self.targetHeight)
+    if Mathf.Abs(slider.value - targetSliderValue) > 0.01 then
+        slider.value = targetSliderValue
+    end
+end
+
+-- 计算带边界的跟随位置（X/Z 轴）
+function TopDownCameraFollow:get_limit_follow_pos()
+    local cs = self.cs
+    local followPos = cs.playerTarget.position + cs.xzOffset
+
+    if cs.limitFollowArea then
+        followPos.x = Mathf.Clamp(followPos.x, cs.followRangeX.x, cs.followRangeX.y)
+        followPos.z = Mathf.Clamp(followPos.z, cs.followRangeZ.x, cs.followRangeZ.y)
+    end
+
+    followPos.y = self.targetHeight
+    return followPos
+end
+
+function TopDownCameraFollow:smooth_update_camera_pos()
+    local cs = self.cs
+    local smoothPos = Vector3.Lerp(cs.transform.position, self.targetFollowPos,
+        cs.followSmoothSpeed * Time.deltaTime * 60)
+    cs.transform.position = smoothPos
+    cs.transform.rotation = Quaternion.Euler(90, 0, 0) -- 固定俯视角
+end
+
+-- 场景切换/销毁时解绑，避免事件重复绑定
+function TopDownCameraFollow:ondestroy()
+    if not self.isSliderInit then return end
+    local panel = self.playerProPanel
+    if not LuaBinding.IsAlive(panel) then return end
+    self.cs:UnbindSliderValueChanged(panel.cameraHeightSlider)
+end
+
+return function(cs)
+    return behaviour.new(cs, TopDownCameraFollow)
+end

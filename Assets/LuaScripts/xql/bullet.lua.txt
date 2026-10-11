@@ -1,0 +1,63 @@
+-- 玩家子弹：直线飞行、超射程回收、命中敌人扣血
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/Bullet.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Space = UnityEngine.Space
+local Time = UnityEngine.Time
+local PoolMgr = CS.PoolMgr
+local LuaBinding = CS.LuaBinding
+
+local Bullet = {}
+
+local POOL_NAME = "PlayerBullet"
+local DEFAULT_SPEED = 20
+local DEFAULT_RANGE = 15
+
+-- 由 PlayerController 调用（或 C# 壳 InitBullet 转发）
+function Bullet:init_bullet(speed, range, damage, direction)
+    self.bulletSpeed = speed
+    self.maxRange = range
+    self.damage = damage
+    self.shootDirection = direction.normalized -- 确保方向归一化
+    self.spawnPosition = self.cs.transform.position
+
+    -- 参数校验，避免异常
+    if self.bulletSpeed <= 0 then self.bulletSpeed = DEFAULT_SPEED end
+    if self.maxRange <= 0 then self.maxRange = DEFAULT_RANGE end
+end
+
+function Bullet:update()
+    -- 未初始化（没走过 init_bullet）时不动，避免 nil 运算
+    if self.shootDirection == nil then return end
+
+    self.cs.transform:Translate(self.shootDirection * (self.bulletSpeed * Time.deltaTime), Space.World)
+
+    local currentDistance = Vector3.Distance(self.cs.transform.position, self.spawnPosition)
+    if currentDistance >= self.maxRange then
+        PoolMgr.Instance:PushObj(POOL_NAME, self.cs.gameObject)
+    end
+end
+
+function Bullet:ontriggerenter(other)
+    if not other:CompareTag("Enemy") then return end
+
+    local go = other.gameObject
+    local enemy = go:GetComponent(typeof(CS.EnemyController))
+    if LuaBinding.IsAlive(enemy) then
+        LuaBinding.CallLua(enemy, "decrease_health", self.damage)
+    else
+        local robot = go:GetComponent(typeof(CS.RobotController))
+        if LuaBinding.IsAlive(robot) then
+            LuaBinding.CallLua(robot, "decrease_health", self.damage)
+        end
+    end
+
+    PoolMgr.Instance:PushObj(POOL_NAME, self.cs.gameObject)
+end
+
+return function(cs)
+    return behaviour.new(cs, Bullet)
+end

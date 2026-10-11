@@ -41,7 +41,8 @@ function EnemyBulletController:ontriggerenter(other)
 
     local player = other.gameObject:GetComponent(typeof(CS.PlayerStats))
     if LuaBinding.IsAlive(player) then
-        player:TakeDamage(self.hitBloodValue or 0)
+        local playerLua = LuaBinding.GetLuaInstance(player)
+        if playerLua ~= nil then playerLua:take_damage(self.hitBloodValue or 0) end
     end
     PoolMgr.Instance:PushObj(self.bulletType, self.cs.gameObject)
 end

@@ -51,9 +51,12 @@ local BATCH_SPAWN_INTERVAL = 0.2 -- 同批次每个敌人之间的间隔（原�
 local MAX_POS_RETRY = 50         -- 同批次位置重试上限
 
 function EnemySpawner:start()
-    -- MaskSelectUIManager / PatternSelectUIManager 是第三批（XQL 层）才迁，目前仍是 C#
+    -- MaskSelectUIManager 的逻辑也已迁到 Lua，取它的实例表调用
     local maskSelect = CS.MaskSelectUIManager.Instance
-    if maskSelect ~= nil then maskSelect:ShowMaskSelectPanel() end
+    if LuaBinding.IsAlive(maskSelect) then
+        local maskSelectLua = LuaBinding.GetLuaInstance(maskSelect)
+        if maskSelectLua ~= nil then maskSelectLua:show_mask_select_panel() end
+    end
 
     self:resolve_player()
 
@@ -154,7 +157,10 @@ function EnemySpawner:upgrade_wave()
 
     self.currentWave = self.currentWave + 1
     local patternSelect = CS.PatternSelectUIManager.Instance
-    if patternSelect ~= nil then patternSelect:OnWaveEnemyDestroyed() end
+    if LuaBinding.IsAlive(patternSelect) then
+        local patternSelectLua = LuaBinding.GetLuaInstance(patternSelect)
+        if patternSelectLua ~= nil then patternSelectLua:on_wave_enemy_destroyed() end
+    end
     self:random_start_rain()
 
     -- 难度递进：最大敌人数 ↑、生成间隔 ↓（不低于下限）

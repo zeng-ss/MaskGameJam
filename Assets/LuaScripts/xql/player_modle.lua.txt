@@ -1,0 +1,61 @@
+-- 玩家模型：Animator 初始化、根运动回调、脚步音效回调
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/PlayerModle.cs
+--
+-- 原来用 C# 的 Action 委托把「脚步」和「根运动」回调交给 PlayerController，
+-- 现在两边都是 Lua，直接存 Lua function 即可（跨语言传委托没必要）。
+
+local behaviour = require 'behaviour'
+
+local LuaBinding = CS.LuaBinding
+
+local PlayerModle = {}
+
+function PlayerModle:onenable()
+    local cs = self.cs
+
+    local anim = cs:GetComponent(typeof(CS.UnityEngine.Animator))
+    -- ⚠️ 空 Unity 对象在 Lua 里不是 nil，必须用 IsAlive 判断
+    if not LuaBinding.IsAlive(anim) then
+        anim = cs.gameObject:AddComponent(typeof(CS.UnityEngine.Animator))
+    end
+    cs.playerAnimator = anim
+
+    if LuaBinding.IsAlive(cs.playerAnimator) then
+        cs.playerAnimator.enabled = true
+        cs.playerAnimator:Rebind()  -- 重置动画状态
+        cs.playerAnimator:Update(0) -- 立即更新一帧
+    end
+end
+
+-- ---------------- 供 PlayerController（Lua）注册回调 ----------------
+
+function PlayerModle:set_foot_step_handler(fn)
+    self.footStepHandler = fn
+end
+
+function PlayerModle:set_root_motion_handler(fn)
+    self.rootMotionHandler = fn
+end
+
+function PlayerModle:clear_root_motion_handler()
+    self.rootMotionHandler = nil
+end
+
+-- ---------------- 回调入口 ----------------
+
+-- 动画事件：脚步声（壳 footStep 转发过来）
+function PlayerModle:foot_step()
+    if self.footStepHandler then self.footStepHandler() end
+end
+
+-- Unity 的 OnAnimatorMove（壳转发过来）——逐帧把根运动偏移交给 PlayerController
+function PlayerModle:on_animator_move()
+    local anim = self.cs.playerAnimator
+    if self.rootMotionHandler ~= nil and LuaBinding.IsAlive(anim) then
+        self.rootMotionHandler(anim.deltaPosition, anim.deltaRotation)
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, PlayerModle)
+end

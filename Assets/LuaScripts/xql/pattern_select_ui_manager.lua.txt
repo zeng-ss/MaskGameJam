@@ -1,0 +1,157 @@
+-- 花纹选择UI（3选1）：面板显隐、花纹信息展示、选择转发给面具系统
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/Mask/PatternSelectUIManager.cs
+--
+-- 数据传递用「花纹下标」而不是对象引用 —— 跨语言传 List<PatternData> 很麻烦。
+-- 下标指的是 MaskSystemManager.allPatternDatas 里的位置，名字/描述通过壳上的扁平接口读。
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local LuaBinding = CS.LuaBinding
+
+local PatternSelectUIManager = {}
+
+function PatternSelectUIManager:awake()
+    local cs = self.cs
+    self.currentOptionalPatterns = {}
+
+    -- 绑定 3 个按钮（对应选项 0/1/2）
+    if LuaBinding.IsAlive(cs.btn_Pattern1) then
+        cs.btn_Pattern1.onClick:AddListener(function() self:select_pattern(0) end)
+    end
+    if LuaBinding.IsAlive(cs.btn_Pattern2) then
+        cs.btn_Pattern2.onClick:AddListener(function() self:select_pattern(1) end)
+    end
+    if LuaBinding.IsAlive(cs.btn_Pattern3) then
+        cs.btn_Pattern3.onClick:AddListener(function() self:select_pattern(2) end)
+    end
+
+    if not (LuaBinding.IsAlive(cs.btn_Pattern1) and LuaBinding.IsAlive(cs.btn_Pattern2)
+        and LuaBinding.IsAlive(cs.btn_Pattern3)) then
+        UnityEngine.Debug.LogError("花纹选择按钮未完全赋值！请在Inspector面板拖拽按钮对象！")
+    end
+
+    if LuaBinding.IsAlive(cs.patternSelectPanel) then
+        cs.patternSelectPanel:SetActive(false) -- 默认隐藏
+    end
+end
+
+-- ---------------- 显示 / 隐藏 ----------------
+
+-- patternIndexes: 3 个花纹在 allPatternDatas 里的下标
+function PatternSelectUIManager:show_pattern_select_panel(patternIndexes)
+    local cs = self.cs
+    self.currentOptionalPatterns = {}
+
+    if not LuaBinding.IsAlive(cs.patternSelectPanel) then
+        UnityEngine.Debug.LogError("【花纹UI】花纹选择面板未赋值！请在Inspector拖拽PatternSelectPanel！")
+        return
+    end
+
+    if patternIndexes == nil then
+        UnityEngine.Debug.LogError("【花纹UI】传入的可选花纹列表为null！请检查面具系统是否生成了有效花纹！")
+        return
+    end
+
+    if #patternIndexes ~= 3 then
+        UnityEngine.Debug.LogError(string.format("【花纹UI】传入的花纹数量不对，当前是%d个，需要3个！", #patternIndexes))
+        return
+    end
+
+    self.currentOptionalPatterns = { patternIndexes[1], patternIndexes[2], patternIndexes[3] }
+    cs.patternSelectPanel:SetActive(true)
+    self:update_pattern_ui_info()
+end
+
+function PatternSelectUIManager:hide_pattern_select_panel()
+    local cs = self.cs
+    if LuaBinding.IsAlive(cs.patternSelectPanel) then
+        cs.patternSelectPanel:SetActive(false)
+    end
+end
+
+-- ---------------- 按钮点击 ----------------
+
+function PatternSelectUIManager:select_pattern(optionIndex)
+    local patternIndex = self.currentOptionalPatterns[optionIndex + 1]
+    if patternIndex == nil then
+        UnityEngine.Debug.LogError("花纹选择索引超出范围！")
+        return
+    end
+
+    -- 转发给面具系统（Lua 实例）
+    local mgr = CS.MaskSystemManager.Instance
+    if LuaBinding.IsAlive(mgr) then
+        local mgrLua = LuaBinding.GetLuaInstance(mgr)
+        if mgrLua ~= nil then mgrLua:select_pattern(patternIndex) end
+    end
+
+    self:hide_pattern_select_panel()
+    self.currentOptionalPatterns = {}
+end
+
+-- ---------------- UI 文本 ----------------
+
+function PatternSelectUIManager:update_pattern_ui_info()
+    local cs = self.cs
+    if #self.currentOptionalPatterns ~= 3 then
+        UnityEngine.Debug.LogWarning("【花纹UI】可选花纹数量不是3个，无法更新UI文本！")
+        return
+    end
+
+    self:set_pattern_text(cs.txt_Pattern1Name, cs.txt_Pattern1Desc, self.currentOptionalPatterns[1])
+    self:set_pattern_text(cs.txt_Pattern2Name, cs.txt_Pattern2Desc, self.currentOptionalPatterns[2])
+    self:set_pattern_text(cs.txt_Pattern3Name, cs.txt_Pattern3Desc, self.currentOptionalPatterns[3])
+end
+
+function PatternSelectUIManager:set_pattern_text(nameTxt, descTxt, patternIndex)
+    -- 花纹名字/描述从面具系统壳上的扁平接口取
+    local name, desc = "", ""
+    local mgr = CS.MaskSystemManager.Instance
+    if patternIndex ~= nil and LuaBinding.IsAlive(mgr) then
+        name = mgr:GetPatternName(patternIndex) or ""
+        desc = mgr:GetPatternDesc(patternIndex) or ""
+    end
+
+    if LuaBinding.IsAlive(nameTxt) then
+        nameTxt.text = (name == "" ) and "未知花纹" or name
+    end
+    if LuaBinding.IsAlive(descTxt) then
+        descTxt.text = (desc == "") and "无描述" or desc
+    end
+end
+
+-- ---------------- 外部入口（EnemySpawner 消灭大波敌人后调用） ----------------
+
+function PatternSelectUIManager:on_wave_enemy_destroyed()
+    local mgr = CS.MaskSystemManager.Instance
+    if not LuaBinding.IsAlive(mgr) then
+        UnityEngine.Debug.LogError("【敌人管理器】MaskSystemManager实例不存在！")
+        return
+    end
+
+    if not mgr.IsMaskSelected then
+        UnityEngine.Debug.LogWarning("【敌人管理器】玩家尚未选择初始面具，无法解锁花纹！")
+        return
+    end
+
+    local mgrLua = LuaBinding.GetLuaInstance(mgr)
+    if mgrLua == nil then return end
+
+    if mgrLua:get_current_pattern_count() >= mgr.MaxPatternCount then
+        UnityEngine.Debug.LogWarning(string.format("【敌人管理器】已达到最大花纹数量（%d个），无法继续解锁！",
+            mgr.MaxPatternCount))
+        return
+    end
+
+    local optional = mgrLua:unlock_pattern_selection()
+    if optional ~= nil and #optional == 3 then
+        self:show_pattern_select_panel(optional)
+    else
+        UnityEngine.Debug.LogError("【敌人管理器】生成的花纹数据无效")
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, PatternSelectUIManager)
+end

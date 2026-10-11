@@ -1,0 +1,61 @@
+-- 面具选择UI：显示/隐藏面板、3 个按钮选择面具派系
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/Mask/MaskSelectUIManager.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local LuaBinding = CS.LuaBinding
+
+local MaskSelectUIManager = {}
+
+function MaskSelectUIManager:awake()
+    local cs = self.cs
+
+    if LuaBinding.IsAlive(cs.btn_Wind) then
+        cs.btn_Wind.onClick:AddListener(function() self:select_mask(CS.MaskFaction.Wind) end)
+    end
+    if LuaBinding.IsAlive(cs.btn_Oni) then
+        cs.btn_Oni.onClick:AddListener(function() self:select_mask(CS.MaskFaction.Oni) end)
+    end
+    if LuaBinding.IsAlive(cs.btn_Random) then
+        cs.btn_Random.onClick:AddListener(function() self:select_mask(CS.MaskFaction.Random) end)
+    end
+
+    -- 默认隐藏面板
+    if LuaBinding.IsAlive(cs.maskSelectPanel) then
+        cs.maskSelectPanel:SetActive(false)
+    end
+end
+
+function MaskSelectUIManager:select_mask(faction)
+    -- 转发给面具系统（Lua 实例）
+    local mgr = CS.MaskSystemManager.Instance
+    if LuaBinding.IsAlive(mgr) then
+        local mgrLua = LuaBinding.GetLuaInstance(mgr)
+        if mgrLua ~= nil then mgrLua:select_initial_mask(faction) end
+    end
+
+    self:hide_mask_select_panel()
+end
+
+-- ---------------- 显示 / 隐藏 ----------------
+
+function MaskSelectUIManager:show_mask_select_panel()
+    local panel = self.cs.maskSelectPanel
+    if LuaBinding.IsAlive(panel) then
+        panel:SetActive(true)
+    else
+        UnityEngine.Debug.LogError("未配置面具选择面板（maskSelectPanel）！")
+    end
+end
+
+function MaskSelectUIManager:hide_mask_select_panel()
+    local panel = self.cs.maskSelectPanel
+    if LuaBinding.IsAlive(panel) then
+        panel:SetActive(false)
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, MaskSelectUIManager)
+end

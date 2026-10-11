@@ -1,0 +1,174 @@
+-- 玩家数值：血量增减、死亡流程、叠加面具增益后的最终属性
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/PlayerStats.cs
+--
+-- ⚠️ 本文件是「玩家数值的唯一真相源」，其他 Lua 模块请通过它的 Lua 实例调用：
+--     local statsLua = CS.LuaBinding.GetLuaInstance(playerStatsComp)
+--     statsLua:get_final_move_speed() / statsLua:take_damage(10)
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Mathf = UnityEngine.Mathf
+local LuaBinding = CS.LuaBinding
+local SoundAudioPool = CS.SoundAudioPool
+local UIManager = CS.UIManager
+local Tween = CS.LuaTween
+
+local PlayerStats = {}
+
+-- 对应 C# 的 Mathf.Round(x * 10) / 10（正数场景下四舍五入到一位小数）
+local function round1(v)
+    return Mathf.Round(v * 10) / 10
+end
+
+-- 取面具系统管理器：返回 C# 组件 + 它的 Lua 实例
+local function get_mask_manager()
+    local mgr = CS.MaskSystemManager.Instance
+    if not LuaBinding.IsAlive(mgr) then return nil, nil end
+    return mgr, LuaBinding.GetLuaInstance(mgr)
+end
+
+-- 是否已选面具（没选就直接返回基础值，不叠加增益）
+local function mask_selected()
+    local mgr, mgrLua = get_mask_manager()
+    if mgr == nil or mgrLua == nil then return false end
+    return mgr.IsMaskSelected == true
+end
+
+local function total_buff(buffType)
+    local _, mgrLua = get_mask_manager()
+    if mgrLua == nil then return 0 end
+    return mgrLua:get_total_buff_value(buffType) or 0
+end
+
+-- ---------------- 初始化 ----------------
+
+function PlayerStats:awake()
+    local cs = self.cs
+
+    -- 初始化当前血量为最大血量，避免初始血量为 0
+    cs.CurrentHealth = cs.maxHealth
+
+    -- 数值合法性校验
+    cs.normalBallisticCount = math.max(cs.normalBallisticCount, 1)
+    cs.burstBallisticCount = math.max(cs.burstBallisticCount, 1)
+    cs.normalShootRate = math.max(cs.normalShootRate, 0.01)
+    cs.burstShootRate = math.max(cs.burstShootRate, 0.01)
+    cs.shootRateMultiplier = math.max(cs.shootRateMultiplier, 0.01)
+end
+
+-- ---------------- 血量增减 ----------------
+
+function PlayerStats:heal_health(healValue)
+    if healValue <= 0 then return end
+    local cs = self.cs
+    cs.CurrentHealth = math.min(cs.CurrentHealth + healValue, cs.maxHealth)
+end
+
+function PlayerStats:take_damage(damageValue)
+    if damageValue <= 0 then return end
+
+    local cs = self.cs
+    -- 护甲减免（最终伤害 = 原始伤害 - 护甲，最低 1）
+    local finalDamage = math.max(damageValue - cs.armor, 1)
+    cs.CurrentHealth = math.max(cs.CurrentHealth - finalDamage, 0)
+
+    if cs.CurrentHealth <= 0 then
+        self:on_player_die()
+    end
+end
+
+function PlayerStats:on_player_die()
+    local cs = self.cs
+
+    -- 禁用玩家控制器，停止移动/射击输入
+    local pc = cs:GetComponent(typeof(CS.PlayerController))
+    if LuaBinding.IsAlive(pc) then pc.enabled = false end
+
+    -- 停掉所有音源
+    local sources = cs:GetComponentsInChildren(typeof(CS.UnityEngine.AudioSource))
+    for i = 0, sources.Length - 1 do
+        sources[i]:Stop()
+    end
+
+    if not self.isPlayerDead then
+        self.isPlayerDead = true
+        local pool = SoundAudioPool.Instance
+        pool:PlaySound(pool.playerDieClip, cs.transform.position)
+    end
+
+    if LuaBinding.IsAlive(cs.playerModel) then
+        cs.playerModel.Animator:SetBool("IsDie", true)
+    end
+
+    -- 原协程：等 2 秒后弹出失败面板
+    Tween.Delay(2, function()
+        UIManager.Instance:openPanelByName("FailPanel")
+    end)
+end
+
+-- ---------------- 只读查询 ----------------
+
+function PlayerStats:get_current_health() return self.cs.CurrentHealth end
+function PlayerStats:get_max_health() return self.cs.maxHealth end
+function PlayerStats:get_health_percent() return self.cs.CurrentHealth / self.cs.maxHealth end
+
+-- ---------------- 临时数值修改 ----------------
+
+function PlayerStats:modify_move_speed(newMoveSpeed, duration)
+    duration = duration or 0
+    if newMoveSpeed <= 0 then newMoveSpeed = 1 end
+
+    local cs = self.cs
+    if duration <= 0 then
+        cs.moveSpeed = newMoveSpeed
+        UnityEngine.Debug.Log("玩家移动速度永久修改为：" .. tostring(cs.moveSpeed))
+        return
+    end
+    UnityEngine.Debug.Log(string.format("玩家移动速度临时修改为：%s | 持续时间：%s秒",
+        tostring(newMoveSpeed), tostring(duration)))
+end
+
+-- ---------------- 叠加面具增益后的最终属性 ----------------
+
+function PlayerStats:get_final_move_speed()
+    local cs = self.cs
+    if not mask_selected() then return cs.moveSpeed end
+    local buffValue = total_buff(CS.BuffType.MoveSpeed)
+    return round1(cs.moveSpeed * (1 + buffValue / 100))
+end
+
+function PlayerStats:get_final_shoot_rate()
+    local cs = self.cs
+    if not mask_selected() then return cs.normalShootRate end
+    local buffValue = total_buff(CS.BuffType.ShootRate)
+    return round1(cs.normalShootRate * (1 + buffValue / 100) * cs.shootRateMultiplier)
+end
+
+function PlayerStats:get_final_attack_damage()
+    local cs = self.cs
+    if not mask_selected() then return cs.attackDamage end
+    local buffValue = total_buff(CS.BuffType.AttackDamage)
+    return round1(cs.attackDamage * (1 + buffValue / 100))
+end
+
+-- ⚠️ 注意：这个版本会**把 maxHealth 改写**成叠加后的值（保持与 C# 原逻辑一致）
+function PlayerStats:get_final_max_health()
+    local cs = self.cs
+    if not mask_selected() then return cs.maxHealth end
+    local buffValue = total_buff(CS.BuffType.MaxHealth)
+    cs.maxHealth = round1(cs.maxHealth * (1 + buffValue / 100))
+    return cs.maxHealth
+end
+
+-- 只计算、不写回（UI 血条用这个）
+function PlayerStats:get_final_max_health_value()
+    local cs = self.cs
+    if not mask_selected() then return cs.maxHealth end
+    local buffValue = total_buff(CS.BuffType.MaxHealth)
+    return round1(cs.maxHealth * (1 + buffValue / 100))
+end
+
+return function(cs)
+    return behaviour.new(cs, PlayerStats)
+end

@@ -122,7 +122,8 @@ function ParabolicBullet:explode()
     local distance = Vector3.Distance(warnPos, player.transform.position)
     if distance <= EXPLODE_RADIUS then
         pool:PlaySound(pool.hitPlayerClip, self.cs.transform.position)
-        player:TakeDamage(self.decreaseHealth)
+        local playerLua = LuaBinding.GetLuaInstance(player)
+        if playerLua ~= nil then playerLua:take_damage(self.decreaseHealth) end
     end
 end
 

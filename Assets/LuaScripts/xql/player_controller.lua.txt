@@ -1,0 +1,268 @@
+-- 玩家控制器：摇杆移动/转向、普通射击与散射射击（动画事件同步发弹）
+-- 对应 C# Assets/Scripts/HotUpdate/XQL/PlayerController.cs
+
+local behaviour = require 'behaviour'
+
+local UnityEngine = CS.UnityEngine
+local Vector3 = UnityEngine.Vector3
+local Quaternion = UnityEngine.Quaternion
+local Mathf = UnityEngine.Mathf
+local Time = UnityEngine.Time
+local LuaBinding = CS.LuaBinding
+local LuaUtil = CS.LuaUtil
+
+local PlayerController = {}
+
+local BULLET_POOL = "PlayerBullet"
+local BURST_BASE_MIN = 5
+local BURST_BASE_MAX = 10
+
+function PlayerController:awake()
+    local cs = self.cs
+
+    -- CharacterController（没有就自动添加并配置）
+    self.characterController = cs:GetComponent(typeof(CS.UnityEngine.CharacterController))
+    if not LuaBinding.IsAlive(self.characterController) then
+        self.characterController = cs.gameObject:AddComponent(typeof(CS.UnityEngine.CharacterController))
+        self.characterController.radius = 0.3
+        self.characterController.height = 1.5
+        self.characterController.center = Vector3(0, 0.75, 0)
+        self.characterController.enabled = true
+    end
+
+    if not LuaBinding.IsAlive(cs.MainCamera) then
+        cs.MainCamera = CS.UnityEngine.Camera.main
+    end
+
+    -- 启用射击动画层
+    if LuaBinding.IsAlive(cs.PlayerAnimator) then
+        cs.PlayerAnimator:SetLayerWeight(cs.shootAnimLayerIndex, cs.ShootLayerWeight)
+    end
+
+    if not LuaBinding.IsAlive(cs.BulletSpawnPoint) then
+        cs.BulletSpawnPoint = cs.PlayerModleTransform
+        UnityEngine.Debug.LogWarning("未指定子弹生成点，默认使用PlayerModle位置")
+    end
+
+    self.yVelocity = 0
+    self.lastNormalShootTime = -self:get_normal_shoot_cooldown()
+    self.lastBurstShootTime = -self:get_burst_shoot_cooldown()
+    self.playerProPanel = CS.UIManager.Instance:getPanelByName("PlayerProPanel")
+end
+
+function PlayerController:update()
+    local cs = self.cs
+
+    if not LuaBinding.IsAlive(self.playerProPanel) then
+        self.playerProPanel = CS.UIManager.Instance:getPanelByName("PlayerProPanel")
+    end
+
+    self:update_player_rotation()
+
+    -- 缓存射击方向（动画事件发射子弹时用）
+    if LuaBinding.IsAlive(cs.PlayerModleTransform) then
+        self.currentShootDirection = cs.PlayerModleTransform.forward
+    end
+
+    local isMoving = self:update_player_movement()
+    if LuaBinding.IsAlive(cs.PlayerAnimator) then
+        cs.PlayerAnimator:SetBool("IsMoving", isMoving)
+    end
+
+    self:update_player_normal_shoot_input()
+    self:update_player_burst_shoot_input()
+end
+
+-- ---------------- 转向 + 移动 ----------------
+
+function PlayerController:update_player_rotation()
+    local panel = self.playerProPanel
+    if not LuaBinding.IsAlive(panel) then return end
+
+    local joystick = panel.rotateJoystick
+    if not LuaBinding.IsAlive(joystick) then return end
+
+    local h, v = joystick.Horizontal, joystick.Vertical
+    -- 无有效输入时不旋转（避免零向量）
+    if Mathf.Abs(h) < 0.01 and Mathf.Abs(v) < 0.01 then return end
+
+    local moveDirection = Vector3(h, 0, v).normalized
+    local tr = self.cs.PlayerModleTransform
+    if not LuaBinding.IsAlive(tr) then return end
+
+    tr.rotation = Quaternion.Lerp(tr.rotation, Quaternion.LookRotation(moveDirection),
+        self.cs.RotateSpeed * Time.deltaTime)
+end
+
+function PlayerController:update_player_movement()
+    local panel = self.playerProPanel
+    if not LuaBinding.IsAlive(panel) then return false end
+
+    local joystick = panel.moveJoystick
+    if not LuaBinding.IsAlive(joystick) then return false end
+
+    local h, v = joystick.Horizontal, joystick.Vertical
+    local moveDir = Vector3(h, 0, v).normalized
+    local isMoving = moveDir.magnitude > 0.01
+
+    local cc = self.characterController
+    if LuaBinding.IsAlive(cc) then
+        if cc.isGrounded then
+            self.yVelocity = -0.5
+        else
+            self.yVelocity = self.yVelocity + self.cs.Gravity * Time.deltaTime
+        end
+    end
+
+    local stats = self.cs.playerStats
+    if isMoving and LuaBinding.IsAlive(stats) and LuaBinding.IsAlive(cc) then
+        local statsLua = LuaBinding.GetLuaInstance(stats)
+        local speed = statsLua ~= nil and statsLua:get_final_move_speed() or 0
+        local moveDelta = moveDir * (speed * Time.deltaTime)
+        moveDelta.y = self.yVelocity * Time.deltaTime
+        cc:Move(moveDelta)
+    end
+
+    return isMoving
+end
+
+-- ---------------- 攻速（冷却） ----------------
+
+function PlayerController:get_normal_shoot_cooldown()
+    local stats = self.cs.playerStats
+    if not LuaBinding.IsAlive(stats) then return 1 end
+
+    local statsLua = LuaBinding.GetLuaInstance(stats)
+    local rate = statsLua ~= nil and statsLua:get_final_shoot_rate() or stats.normalShootRate
+    local finalShootPerSecond = rate * stats.shootRateMultiplier
+    if finalShootPerSecond <= 0 then return 1 end
+    return Mathf.Max(1 / finalShootPerSecond, 0.05)
+end
+
+function PlayerController:get_burst_shoot_cooldown()
+    local stats = self.cs.playerStats
+    if not LuaBinding.IsAlive(stats) then return 2 end
+
+    local finalBurstPerSecond = stats.burstShootRate * stats.shootRateMultiplier
+    if finalBurstPerSecond <= 0 then return 2 end
+    return Mathf.Max(1 / finalBurstPerSecond, 0.5)
+end
+
+-- ---------------- 普通射击 ----------------
+
+function PlayerController:update_player_normal_shoot_input()
+    local panel = self.playerProPanel
+    if not LuaBinding.IsAlive(panel) then return end
+
+    local cs = self.cs
+    local canShoot = panel.isNormalShoot == true
+        and Time.time >= self.lastNormalShootTime + self:get_normal_shoot_cooldown()
+        and LuaBinding.IsAlive(cs.BulletPrefab)
+        and LuaBinding.IsAlive(cs.playerStats)
+
+    if canShoot then
+        self.lastNormalShootTime = Time.time
+        if LuaBinding.IsAlive(cs.PlayerAnimator) then
+            cs.PlayerAnimator:Play(cs.normalShootAnimStateName, cs.shootAnimLayerIndex, 0)
+        end
+    end
+end
+
+-- 动画事件：普通射击开火帧
+function PlayerController:on_normal_shoot_anim_event()
+    local cs = self.cs
+    local dir = self.currentShootDirection
+    if LuaBinding.IsAlive(cs.BulletPrefab) and LuaBinding.IsAlive(cs.playerStats)
+        and dir ~= nil and dir.sqrMagnitude > 0.0001 then
+        self:fire_normal_bullet(dir)
+    end
+end
+
+function PlayerController:on_normal_shoot_end_anim_event()
+    -- 无需额外逻辑，普通射击可随时中断或重复播放
+end
+
+function PlayerController:fire_normal_bullet(shootDirection)
+    local cs = self.cs
+    local stats = cs.playerStats
+    local count = stats.normalBallisticCount
+
+    for _ = 1, count do
+        CS.PoolMgr.Instance:GetObjAsync(BULLET_POOL, function(bullet)
+            if not LuaBinding.IsAlive(bullet) then return end
+            bullet.transform.position = cs.BulletSpawnPoint.position
+            local bulletLua = LuaBinding.GetLuaInstance(bullet:GetComponent(typeof(CS.Bullet)))
+            if bulletLua ~= nil then
+                bulletLua:init_bullet(stats.normalBulletSpeed, stats.bulletMaxRange,
+                    stats.attackDamage, shootDirection)
+            end
+        end)
+    end
+end
+
+-- ---------------- 散射射击 ----------------
+
+function PlayerController:update_player_burst_shoot_input()
+    local panel = self.playerProPanel
+    if not LuaBinding.IsAlive(panel) then return end
+
+    local cs = self.cs
+    local canBurst = panel.isNormalShoot ~= true
+        and Time.time >= self.lastBurstShootTime + self:get_burst_shoot_cooldown()
+        and LuaBinding.IsAlive(cs.BulletPrefab)
+        and LuaBinding.IsAlive(cs.playerStats)
+
+    if canBurst then
+        self.lastBurstShootTime = Time.time
+        if LuaBinding.IsAlive(cs.PlayerAnimator) then
+            cs.PlayerAnimator.speed = 1
+            cs.PlayerAnimator:Play(cs.burstShootAnimStateName, cs.shootAnimLayerIndex, 0)
+        end
+    end
+end
+
+-- 动画事件：散射开火帧
+function PlayerController:on_burst_shoot_anim_event()
+    local cs = self.cs
+    local dir = self.currentShootDirection
+    if LuaBinding.IsAlive(cs.BulletPrefab) and LuaBinding.IsAlive(cs.playerStats)
+        and dir ~= nil and dir.sqrMagnitude > 0.0001 then
+        self:fire_burst_bullet(dir)
+    end
+end
+
+function PlayerController:on_burst_shoot_end_anim_event()
+end
+
+function PlayerController:fire_burst_bullet(shootDirection)
+    local cs = self.cs
+    local stats = cs.playerStats
+
+    -- 弹道数 = 基础数量 × 2^(散射弹道等级-1)
+    local multiplier = math.floor(2 ^ (stats.burstBallisticCount - 1))
+    local countMin = BURST_BASE_MIN * multiplier
+    local countMax = BURST_BASE_MAX * multiplier
+    local actualCount = LuaUtil.RangeInt(countMin, countMax + 1)
+
+    local halfSpreadAngle = cs.BurstSpreadAngle / 2
+
+    for _ = 1, actualCount do
+        local randomAngle = LuaUtil.Range(-halfSpreadAngle, halfSpreadAngle)
+        local spreadRotation = Quaternion.Euler(0, randomAngle, 0)
+        local spreadDirection = spreadRotation * shootDirection
+
+        CS.PoolMgr.Instance:GetObjAsync(BULLET_POOL, function(bullet)
+            if not LuaBinding.IsAlive(bullet) then return end
+            bullet.transform.position = cs.BulletSpawnPoint.position
+            local bulletLua = LuaBinding.GetLuaInstance(bullet:GetComponent(typeof(CS.Bullet)))
+            if bulletLua ~= nil then
+                bulletLua:init_bullet(stats.burstBulletSpeed, stats.bulletMaxRange,
+                    stats.attackDamage, spreadDirection)
+            end
+        end)
+    end
+end
+
+return function(cs)
+    return behaviour.new(cs, PlayerController)
+end

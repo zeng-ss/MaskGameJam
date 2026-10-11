@@ -49,7 +49,9 @@ function WeaponController:ontriggerstay(other)
     local damage = GameManager.Instance:GetEnemyDamage(cs.curEnemyName)
     local pool = SoundAudioPool.Instance
     pool:PlaySound(pool.hitPlayerClip, cs.transform.position)
-    player:TakeDamage(damage)
+
+    local playerLua = LuaBinding.GetLuaInstance(player)
+    if playerLua ~= nil then playerLua:take_damage(damage) end
 
     -- 等粒子播完再回收（原来由协程负责）
     local duration = LuaUtil.ParticleDuration(blood)
