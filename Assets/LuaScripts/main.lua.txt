@@ -1,0 +1,21 @@
+-- Lua 热更入口
+-- 由 XLuaManager.Instance.StartLua() 触发，等价于 require 'main'
+-- 修改本文件后，重新执行 Build/PrepareLuaAssets 并打 Addressables 更新包即可生效
+
+print("[lua] main.lua loaded")
+
+local UnityEngine = CS.UnityEngine
+
+UnityEngine.Debug.Log("[lua] hello from lua, unityVersion = " .. UnityEngine.Application.unityVersion)
+
+-- 演示 require 子模块：require "demo.greet" -> 地址 lua/demo/greet.lua
+local greet = require 'demo.greet'
+greet.say("xLua")
+
+-- 供 C# 侧回调的入口函数
+-- 调用方式：XLuaManager.Instance.DoString("on_game_start()")
+function on_game_start()
+    UnityEngine.Debug.Log("[lua] on_game_start called")
+end
+
+return true

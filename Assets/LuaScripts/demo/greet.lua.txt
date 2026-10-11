@@ -1,0 +1,10 @@
+-- 演示子模块加载：require 'demo.greet'
+
+local M = {}
+
+function M.say(who)
+    local UnityEngine = CS.UnityEngine
+    UnityEngine.Debug.Log("[lua] greet: hello " .. tostring(who))
+end
+
+return M

@@ -17,21 +17,24 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class HotUpdateSystem : MonoBehaviour
 {
-    private DllConfig dllConfig;                                 // 存储 DLL配置信息的对象
-    private IHotUpdateWindow hotUpdateWindow;                    // 热更新窗口接口引用，用于显示下载进度
-    private const string dllConfigKey = "DllConfig";             // DLL配置文件的 Addressables Key
-    private const string gameLanuchKey = "GameLanuch";           // 游戏启动器的 Addressables Key
+    private DllConfig dllConfig; // 存储 DLL配置信息的对象
+    private IHotUpdateWindow hotUpdateWindow; // 热更新窗口接口引用，用于显示下载进度
+    private const string dllConfigKey = "DllConfig"; // DLL配置文件的 Addressables Key
+    private const string gameLanuchKey = "GameLanuch"; // 游戏启动器的 Addressables Key
     private const string hotUpdateWindowKey = "HotUpdateWindow"; // 热更新窗口的 Addressable Key
-    
-    private HashSet<string> loadedDlls = new ();                 // 记录已经加载过的 DLL，避免重复加载
+    private const string luaGroupKey = "Lua"; // Lua脚本分组的 Addressables Label
+
+    private HashSet<string> loadedDlls = new(); // 记录已经加载过的 DLL，避免重复加载
     private string catalogPath => $"{persistentDataPath}/catalog_0.1.json"; // catalog文件路径，指向持久化存储的 catalog文件
-    private string persistentDataPath => $"{Application.persistentDataPath}/com.unity.addressables"; // 持久化数据路径，Addressables的缓存目录
+
+    private string persistentDataPath =>
+        $"{Application.persistentDataPath}/com.unity.addressables"; // 持久化数据路径，Addressables的缓存目录
 
     private void Start()
     {
         // 构建 Addressables 缓存目录路径
         // 格式：C:\Users\用户名\AppData\LocalLow\公司名\应用名\com.unity.addressables
-        StartCoroutine(HotUpdate());  // 开始热更新流程
+        StartCoroutine(HotUpdate()); // 开始热更新流程
     }
 
     /// <summary>
@@ -50,30 +53,29 @@ public class HotUpdateSystem : MonoBehaviour
             // 清理缓存目录，确保重新下载
             if (Directory.Exists(persistentDataPath))
             {
-                Directory.Delete(persistentDataPath, true);  // 递归删除整个目录
+                Directory.Delete(persistentDataPath, true); // 递归删除整个目录
             }
         }
-        
+
         // 设置当前热更新状态为"进行中"
         PlayerPrefs.SetInt("HotUpdateSucceed", 0);
-        
+
         //第二步：初始化 Addressables系统 
-        yield return Addressables.InitializeAsync();  // 初始化 Addressables，必须调用
-        
+        yield return Addressables.InitializeAsync(); // 初始化 Addressables，必须调用
+
         // 第三步：检测 catalog更新 
         yield return CheckForCatalogUpdates();
-        
+
         // 第四步：标记热更新完成
-        PlayerPrefs.SetInt("HotUpdateSucceed", 1);  // 更新成功，设置为1
-        
-        // 第五步：加载程序集和开始游戏
+        PlayerPrefs.SetInt("HotUpdateSucceed", 1); // 更新成功，设置为1
+
+        // 第五步：加载 Lua脚本并启动 Lua入口（Lua热更）
         // 无论是否热更，都需要进入此处
-        // 加载热更程序集
-        LoadHotUpdateAssembly();
-        
+        yield return LoadLuaScripts();
+
         if (hotUpdateWindow == null) // 如果有窗口就按照窗口的进度来，如果没有窗口就直接开始游戏
         {
-            GameLanuch();  // 直接启动游戏
+            GameLanuch(); // 直接启动游戏
             // 这样开始游戏也可以通过什么东西（组件）来实现开始逻辑    Addressables.InstantiateAsync("xxx").WaitForCompletion();
         }
     }
@@ -88,10 +90,10 @@ public class HotUpdateSystem : MonoBehaviour
     {
         // 检查是否有新的 catalog版本可用
         // false参数表示只检查不自动更新
-        AsyncOperationHandle<List<string>> checkForCatalogUpdatesHandle = 
-            Addressables.CheckForCatalogUpdates(false);  // false: 不自动更新，只检查
-        yield return checkForCatalogUpdatesHandle;  // 等待检查完成
-        
+        AsyncOperationHandle<List<string>> checkForCatalogUpdatesHandle =
+            Addressables.CheckForCatalogUpdates(false); // false: 不自动更新，只检查
+        yield return checkForCatalogUpdatesHandle; // 等待检查完成
+
         if (checkForCatalogUpdatesHandle.Status != AsyncOperationStatus.Succeeded)
         {
             // 检查失败，抛出异常
@@ -102,18 +104,18 @@ public class HotUpdateSystem : MonoBehaviour
             Debug.Log("CheckForCatalogUpdates成功 - 已检查到catalog更新状态");
             // 拿到需要更新的 catalog列表
             List<string> catalogResult = checkForCatalogUpdatesHandle.Result;
-            
-            if (catalogResult.Count > 0)  // 有 catalog需要更新
+
+            if (catalogResult.Count > 0) // 有 catalog需要更新
             {
                 // foreach (var result in catalogResult) { print(result); }  // 打印需要更新的 catalog名称
-                yield return UpdateCatalogs(catalogResult);  // 更新 catalog
+                yield return UpdateCatalogs(catalogResult); // 更新 catalog
             }
-            else  // 没有需要更新的 catalog
+            else // 没有需要更新的 catalog
             {
                 print("无需更新 - catalog已是最新版本");
             }
         }
-        
+
         // 释放Addressables操作句柄，避免内存泄漏
         Addressables.Release(checkForCatalogUpdatesHandle);
     }
@@ -128,10 +130,10 @@ public class HotUpdateSystem : MonoBehaviour
     {
         // 更新指定的 catalog
         // false参数表示不自动下载资源，只更新catalog
-        AsyncOperationHandle<List<IResourceLocator>> updateCatalogHandle = 
-            Addressables.UpdateCatalogs(catalogResult, false);  // false: 不自动下载资源
-        yield return updateCatalogHandle;  // 等待更新完成
-        
+        AsyncOperationHandle<List<IResourceLocator>> updateCatalogHandle =
+            Addressables.UpdateCatalogs(catalogResult, false); // false: 不自动下载资源
+        yield return updateCatalogHandle; // 等待更新完成
+
         if (updateCatalogHandle.Status != AsyncOperationStatus.Succeeded)
         {
             // 更新失败，抛出异常
@@ -142,20 +144,22 @@ public class HotUpdateSystem : MonoBehaviour
             Debug.Log("UpdateCatalogs 成功 - catalog已更新");
             // 获取更新后的资源定位器列表
             List<IResourceLocator> locatorList = updateCatalogHandle.Result;
-            
+
             if (locatorList.Count > 0)
             {
                 // 收集所有资源的 Key（标识符）
-                List<object> keys = new List<object>(1000);  // 预分配容量
+                List<object> keys = new List<object>(1000); // 预分配容量
                 foreach (var result in locatorList)
                 {
                     // print(result.LocatorId);  // 打印定位器 ID
-                    keys.AddRange(result.Keys);  // 添加所有资源 Key
+                    keys.AddRange(result.Keys); // 添加所有资源 Key
                 }
+
                 // ====== 第四步：计算需要下载的资源大小 ======
                 yield return GetDownloadSize(keys);
             }
         }
+
         // 释放Addressables操作句柄
         Addressables.Release(updateCatalogHandle);
     }
@@ -170,16 +174,16 @@ public class HotUpdateSystem : MonoBehaviour
     {
         // 计算指定资源的总下载大小
         AsyncOperationHandle<long> sizeHandle = Addressables.GetDownloadSizeAsync(keys);
-        yield return sizeHandle;  // 等待计算完成
-        
+        yield return sizeHandle; // 等待计算完成
+
         if (sizeHandle.Status != AsyncOperationStatus.Succeeded)
         {
             Debug.LogError($"GetDownloadSize 失败: {sizeHandle.OperationException}");
         }
         else
         {
-            long downloadSize = sizeHandle.Result;  // 获取总大小（字节）
-            if (downloadSize > 0)  // 有资源需要下载
+            long downloadSize = sizeHandle.Result; // 获取总大小（字节）
+            if (downloadSize > 0) // 有资源需要下载
             {
                 // 先执行优先热更（下载并加载必要的 DLL和 UI）
                 yield return PriorityHotUpdate();
@@ -189,8 +193,12 @@ public class HotUpdateSystem : MonoBehaviour
                 // 开始下载资源 
                 yield return DownloadDependencies(keys, downloadSize);
             }
-            else { print("无需更新 - 没有需要下载的资源"); }
+            else
+            {
+                print("无需更新 - 没有需要下载的资源");
+            }
         }
+
         // 释放Addressables操作句柄
         Addressables.Release(sizeHandle);
     }
@@ -207,25 +215,26 @@ public class HotUpdateSystem : MonoBehaviour
         // 开始下载资源依赖
         // MergeMode.Union表示合并所有资源的依赖
         // false表示异步下载
-        AsyncOperationHandle downloadHandle = 
+        AsyncOperationHandle downloadHandle =
             Addressables.DownloadDependenciesAsync(keys, Addressables.MergeMode.Union, false);
-        
+
         // ====== 循环监控下载进度 ======
-        while (!downloadHandle.IsDone)  // 下载未完成时循环
+        while (!downloadHandle.IsDone) // 下载未完成时循环
         {
             if (downloadHandle.Status == AsyncOperationStatus.Failed)
             {
                 Debug.LogError($"DownloadDependencies 失败: {downloadHandle.OperationException}");
-                break;  // 下载失败，跳出循环
+                break; // 下载失败，跳出循环
             }
             // 获取当前下载进度
             // float percentage = downloadHandle.GetDownloadStatus().Percent;  // 下载进度（0 ~ 1）
             // long currentDownloadSize = (long)(downloadSize * percentage);  // 当前已下载量（字节）
-            
+
             // 更新 UI显示：传入下载进度百分比
             hotUpdateWindow.UpdateDownloadProgress(downloadHandle.GetDownloadStatus().Percent);
-            yield return null;  // 等待下一帧继续检查
+            yield return null; // 等待下一帧继续检查
         }
+
         // 确保进度显示为100%
         hotUpdateWindow?.UpdateDownloadProgress(1);
         print("热更完成! - 所有资源已下载完成");
@@ -245,15 +254,15 @@ public class HotUpdateSystem : MonoBehaviour
         // 1. 先下载 dll配置文件
         // true表示强制重新下载
         yield return Addressables.DownloadDependenciesAsync(dllConfigKey, true);
-        
+
         // 2. 加载 DLL配置
         // WaitForCompletion()是同步等待方法（注意：在协程中使用要小心死锁）
         dllConfig = Addressables.LoadAssetAsync<DllConfig>(dllConfigKey).WaitForCompletion();
-        
+
         // 3. 下载优先热更程序集（异步，不等待）
         // 先开始下载，后面再加载
         Addressables.DownloadDependenciesAsync(dllConfig.priorityHotUpdate, Addressables.MergeMode.Union, true);
-        
+
 #if !UNITY_EDITOR
         // 4. 加载优先热更程序集（只在非编辑器环境执行）
         // 编辑器环境下直接使用源代码，不需要加载 DLL
@@ -273,8 +282,8 @@ public class HotUpdateSystem : MonoBehaviour
         yield return Addressables.DownloadDependenciesAsync(hotUpdateWindowKey, true);
         // 6.2 实例化热更新窗口 GameObject
         hotUpdateWindow = Addressables.InstantiateAsync(hotUpdateWindowKey)
-            .WaitForCompletion()                // 等待实例化完成
-            .GetComponent<IHotUpdateWindow>();  // 获取接口组件
+            .WaitForCompletion() // 等待实例化完成
+            .GetComponent<IHotUpdateWindow>(); // 获取接口组件
     }
 
     /// <summary>
@@ -290,6 +299,7 @@ public class HotUpdateSystem : MonoBehaviour
             Assembly.Load(dllTextAsset.bytes);
             loadedDlls.Add(dllTextAsset.name);
         }
+
         // 释放 TextAsset资源
         Addressables.Release(dllTextAsset);
     }
@@ -301,42 +311,74 @@ public class HotUpdateSystem : MonoBehaviour
     /// </summary>
     private void ReloadContentCatalog()
     {
-        Addressables.LoadContentCatalogAsync(catalogPath).WaitForCompletion();  // 加载本地的 catalog
+        Addressables.LoadContentCatalogAsync(catalogPath).WaitForCompletion(); // 加载本地的 catalog
     }
-    
+
+    /// <summary>
+    /// 下载 Lua脚本分组并启动 xLua 环境
+    /// 1. 下载所有 Lua 脚本资源
+    /// 2. 创建 XLuaManager 并初始化 LuaEnv
+    /// 3. 执行 Lua 入口 require 'main'
+    /// Lua 失败不应阻断后续进入游戏，所以这里捕获异常
+    /// </summary>
+    private IEnumerator LoadLuaScripts()
+    {
+        // 1. 下载 Lua 分组（true 表示强制重新下载）
+        AsyncOperationHandle luaHandle = Addressables.DownloadDependenciesAsync(luaGroupKey, true);
+        yield return luaHandle;
+        if (luaHandle.Status != AsyncOperationStatus.Succeeded)
+        {
+            // 没跑过 Build/PrepareLuaAssets 时会走到这里，给出明确提示而不是静默失败
+            Debug.LogWarning(
+                $"[HotUpdateSystem] Lua分组下载失败（是否已执行 Build/PrepareLuaAssets？）: {luaHandle.OperationException?.Message}");
+        }
+
+        Addressables.Release(luaHandle);
+
+        // 2. 创建管理器并初始化 LuaEnv
+        GameObject luaGo = new GameObject("XLuaManager");
+        XLuaManager luaManager = luaGo.AddComponent<XLuaManager>();
+        luaManager.InitLuaEnv();
+
+        // 3. 执行 Lua 入口
+        luaManager.StartLua();
+    }
+
     /// <summary>
     /// 加载热更程序集
     /// 加载所有热更DLL到运行时，包括优先热更和普通热更
     /// 只在非编辑器环境执行
+    /// 注意：项目已改为 Lua 热更（xLua），该方法已停用，保留仅作参考
     /// </summary>
     private void LoadHotUpdateAssembly()
     {
 #if UNITY_EDITOR
-        return;  // 编辑器环境下直接使用源代码
+        return; // 编辑器环境下直接使用源代码
 #endif
         // 如果 dllConfig还没加载，先加载它
         if (dllConfig == null) // 避免没有加载过优先热更
         {
             dllConfig = Addressables.LoadAssetAsync<DllConfig>(dllConfigKey).WaitForCompletion();
         }
+
         // 加载优先热更程序集（如果 PriorityHotUpdate中已经加载过，这里会跳过）
         foreach (string dllName in dllConfig.priorityHotUpdate)
         {
             TextAsset dllText = Addressables.LoadAssetAsync<TextAsset>(dllName).WaitForCompletion();
             LoadDll(dllText);
         }
-        
+
         // 加载普通热更程序集
         foreach (string dllName in dllConfig.hotUpdate)
         {
             TextAsset dllText = Addressables.LoadAssetAsync<TextAsset>(dllName).WaitForCompletion();
             LoadDll(dllText);
         }
-        
+
         // 重新加载 catalog（因为加载了新 DLL）
         ReloadContentCatalog();
     }
-    
+
     /// <summary>
     /// 跳转到游戏场景
     /// 热更新完成后，启动游戏主逻辑
@@ -351,13 +393,18 @@ public class HotUpdateSystem : MonoBehaviour
             // 先转换为 Component获取 GameObject，然后释放 Addressables资源
             Addressables.Release(((Component)hotUpdateWindow).gameObject);
         }
+
         // 释放DLL配置资源
-        if (dllConfig != null) { Addressables.Release(dllConfig); }
+        if (dllConfig != null)
+        {
+            Addressables.Release(dllConfig);
+        }
+
         // 加载游戏主场景
         // 通过 Addressables实例化 GameLanuch对象，它会负责加载游戏场景
         Addressables.InstantiateAsync(gameLanuchKey).WaitForCompletion();
     }
-    
+
     /// <summary>
     /// 获取版本信息
     /// </summary>
@@ -370,7 +417,7 @@ public class HotUpdateSystem : MonoBehaviour
         Addressables.Release(textAsset);
         return info;
     }
-    
+
     /// <summary>
     /// 获取版本号信息
     /// </summary>
@@ -383,5 +430,4 @@ public class HotUpdateSystem : MonoBehaviour
         Addressables.Release(textAsset);
         return info;
     }
-    
 }
