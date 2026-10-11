@@ -40,7 +40,7 @@ function MaskController:update()
     self.shotTimer = self.shotTimer + Time.deltaTime
     if self.shotTimer >= self.currentCoolTime then
         local obj = PoolMgr.Instance:GetObj(PARABOLIC_BULLET_POOL)
-        if obj == nil then return end
+        if not LuaBinding.IsAlive(obj) then return end
 
         local pool = SoundAudioPool.Instance
         pool:PlaySound(pool.parabolicClip, tr.position)

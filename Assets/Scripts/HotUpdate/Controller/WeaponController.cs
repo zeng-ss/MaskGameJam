@@ -14,6 +14,16 @@ public class WeaponController : LuaBehaviour
 
     protected override string DefaultLuaModule => "weapon_controller";
 
+    /// <summary>
+    /// 开关武器碰撞器。
+    /// 包成方法的原因：`collider` 可能在预制体上是空的，Lua 里 `~= nil` 判断不出来
+    /// （xLua 把空 Unity 对象 push 成非 nil 的包装），直接访问 .enabled 会抛异常。
+    /// </summary>
+    public void SetHitColliderEnabled(bool value)
+    {
+        if (collider != null) collider.enabled = value;
+    }
+
     /// <summary>物理回调转发：武器持续碰到玩家</summary>
     private void OnTriggerStay(Collider other) => _binding.InvokeLua("ontriggerstay", other);
 

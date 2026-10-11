@@ -7,6 +7,7 @@ local UnityEngine = CS.UnityEngine
 local Mathf = UnityEngine.Mathf
 local Vector3 = UnityEngine.Vector3
 local ResMgr = CS.ResMgr
+local LuaBinding = CS.LuaBinding
 
 local MaskSpawner = {}
 
@@ -20,7 +21,7 @@ function MaskSpawner:start()
         -- 注意：Lua 的 for 循环变量每次迭代都是新的局部变量，
         -- 所以下面闭包捕获的 i 是正确的（不像 C# 的 for 循环需要额外拷贝）
         ResMgr.Instance:LoadAndInstantiateAsync("Mask", nil, function(mask)
-            if mask == nil then
+            if not LuaBinding.IsAlive(mask) then
                 UnityEngine.Debug.LogError("护盾预制体加载失败！")
                 return
             end

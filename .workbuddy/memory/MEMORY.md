@@ -168,7 +168,42 @@ public static Func<MemberInfo, bool> MethodFilter = (memberInfo) =>
 - **`const` 字段 Lua 取不到**（`Mathf.Deg2Rad`、`NavMesh.AllAreas`）→ 直接写字面量 / `math.rad`。
 - **单例基类冲突**：`KeyBindingManager` 原继承 `UnitySingleTonMono<T>`，改 `LuaBehaviour` 后单继承被占，
   在壳里自己实现静态 `Instance`（跨场景保留 + 重复实例自毁），行为对齐原基类。
+- **`behaviour.new()` 必须把模块的普通方法也挂到实例表上**（否则跨语言调用全部失效）
+  - 症状：`LuaBinding.CallLua(comp, "start_countdown", 5)` 报
+    「TimerPanel 的 Lua 模块里没有方法 start_countdown()」；
+    连带 `EnemyBulletController:init` 调不到 → `self.bulletType` 为 nil →
+    `PoolMgr.PushObj(nil, obj)` 抛 `Value cannot be null. Parameter name: key`（日志里刷屏）。
+  - 原因：早期 `new()` 只返回一张「生命周期 handlers 表」，普通方法根本没暴露。
+  - 现在的 `new()`：**返回的就是实例表 `o` 本身**（不能再另建转发表 —— 否则
+    `self.xxx = ...` 写到不同表上，运行时状态会分裂），上面同时挂：
+    a) 绑死 self 的生命周期无参闭包（C# 侧按 `Action` 取）；
+    b) 原样引用的普通方法（**不绑 self**，由调用方传）。
+  - 配套：`LuaBinding.CallLua` / `InvokeLua` 会把**实例表作为 self 插到实参最前面**，
+    于是 Lua 侧 `inst:foo(x)` 与 C# 侧 `CallLua(comp,"foo",x)` 的 self 完全一致。
+  - ⚠️ `behaviour.lua` 是 Addressables 资源，**改完必须重新 PrepareLuaAssets + 构建**才生效。
+
 - **访问修饰符要放开**：`WeaponController.collider` 原是 `private [SerializeField]`，Lua 读不到 → 改 `public`。
+
+🔴 **【最隐蔽的坑】Lua 里 `field ~= nil` 判断不出「空的 Unity 对象字段」**（2026-10-11 第 2 批验证时踩到）
+- 现象：`if cs.sphereCollider ~= nil then cs.sphereCollider.enabled = true end` 走 then 分支，
+  抛 `LuaException: c# exception:The variable sphereCollider of EnemyController has not been assigned`，
+  堆栈是 `[C]: in metamethod '__newindex'` → `Collider.set_enabled`。
+  **xLua 把空的 Unity 对象 push 成「非 nil 的包装」**，所以 `~= nil` 恒为 true。
+- 危害链（要牢记）：异常发生在 `onenable` 的**前几行**，导致后面
+  `self.currentHealth` / `self.hitBlood` / `self.dataValid` 全部没被赋值 →
+  敌人血量算不出来（打不死）、机器人子弹伤害为 nil（玩家掉不了血）；
+  同类异常还会让 `EnemySpawner:start` 的后续步骤（打开倒计时面板）被跳过。
+  **一个空字段判断失误，表现成「伤害丢失 + 谁都死不了 + 倒计时面板不工作」三个不相关的 bug。**
+- 解法（两条，都做）：
+  1. **涉及 Unity 组件字段的，在 C# 壳里包成方法**，用 C# 的 null 语义判断：
+     `EnemyController.SetBodyColliderEnabled(bool)`（sphereCollider 优先，没配则 capsuleCollider）、
+     `RobotController.SetSphereColliderEnabled(bool)`、`WeaponController.SetHitColliderEnabled(bool)`。
+  2. **其余一切空判断一律 `CS.LuaBinding.IsAlive(obj)`**，禁止 `obj ~= nil` / `== nil`。
+     已全量替换：`PoolMgr.GetObj` 返回值、`GetComponent` 结果、`SceneObjectManager` 结果、
+     面板回调的 panel、`getPanelByName` 结果、`startTarget/endTarget`、`targetModel`、`fireEffect`、
+     缓存的 `characterController`、`cs.healthImage` …
+- 配套加固：`EnemySpawner:start` 里的对象池预加载包了 `pcall`，
+  避免「某个敌人预制体缺组件」连带把后面的倒计时面板一起吞掉（异常只记一条 error）。
 
 **进度**：第 1 批（基础设施 + UI 层 5 个面板）✅ 2026-10-11，运行时两个坑已修并验证通过；
 **第 2 批 Controller 层 13 个 ✅ 2026-10-11**（`SoundAudioPool` 判定为服务层，保留 C#），待用户验证；

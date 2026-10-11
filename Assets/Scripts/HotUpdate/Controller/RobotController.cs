@@ -20,6 +20,16 @@ public class RobotController : LuaBehaviour
 
     protected override string DefaultLuaModule => "robot_controller";
 
+    /// <summary>
+    /// 开关受击碰撞器。
+    /// 包成方法的原因同 EnemyController.SetBodyColliderEnabled：
+    /// Lua 里 `cs.sphereCollider ~= nil` 判断不出空的 Unity 对象。
+    /// </summary>
+    public void SetSphereColliderEnabled(bool value)
+    {
+        if (sphereCollider != null) sphereCollider.enabled = value;
+    }
+
     /// <summary>受击入口（原本被 EnemySpawner / Bullet 调用）</summary>
     public void DecreaseHealth(float amount) => _binding.InvokeLua("decrease_health", amount);
 }

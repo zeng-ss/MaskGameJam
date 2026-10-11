@@ -47,12 +47,12 @@ end
 function EnemyController:onenable()
     local cs = self.cs
 
-    self.characterController.enabled = true
-    if cs.sphereCollider ~= nil then
-        cs.sphereCollider.enabled = true
-    else
-        cs.capsuleCollider.enabled = true
+    if LuaBinding.IsAlive(self.characterController) then
+        self.characterController.enabled = true
     end
+    -- ⚠️ 不能写成 `if cs.sphereCollider ~= nil`：空的 Unity 对象在 Lua 里**不是 nil**，
+    --    会走 then 分支然后在 .enabled 上抛异常。交给 C# 壳用 Unity 的 null 语义判断。
+    cs:SetBodyColliderEnabled(true)
 
     self.isDead = false
     self.isMoving = false
@@ -81,7 +81,7 @@ function EnemyController:update()
     local cs = self.cs
     local cc = self.characterController
 
-    if cc.enabled then
+    if LuaBinding.IsAlive(cc) and cc.enabled then
         cc:Move(self.volecity * Time.deltaTime)
         self.isOnGround = cc.isGrounded
         if self.isOnGround then
@@ -189,11 +189,9 @@ function EnemyController:decrease_health(amount)
     if self.currentHealth > 0 then return end
 
     local cs = self.cs
-    self.characterController.enabled = false
-    if cs.sphereCollider ~= nil then
-        cs.sphereCollider.enabled = false
-    else
-        cs.capsuleCollider.enabled = false
+    cs:SetBodyColliderEnabled(false)
+    if LuaBinding.IsAlive(self.characterController) then
+        self.characterController.enabled = false
     end
 
     local pool = SoundAudioPool.Instance

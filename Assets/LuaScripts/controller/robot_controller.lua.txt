@@ -51,8 +51,11 @@ function RobotController:onenable()
     self.hitBlood = GameManager.Instance:GetEnemyDamage(enemyName)
     self.currentHealth = GameManager.Instance:GetEnemyHealth(enemyName)
 
-    self.characterController.enabled = true
-    cs.sphereCollider.enabled = true
+    if LuaBinding.IsAlive(self.characterController) then
+        self.characterController.enabled = true
+    end
+    -- ⚠️ 空的 Unity 对象在 Lua 里不是 nil，判定交给 C# 壳
+    cs:SetSphereColliderEnabled(true)
     cs.transform.localScale = Vector3.one
     self.volecity = Vector3.zero
 end
@@ -63,7 +66,7 @@ function RobotController:update()
     local cs = self.cs
     local cc = self.characterController
 
-    if cc.enabled then
+    if LuaBinding.IsAlive(cc) and cc.enabled then
         cc:Move(self.volecity * Time.deltaTime)
         if cc.isGrounded then
             self.volecity.y = -2
@@ -109,10 +112,12 @@ function RobotController:shot_bullet()
     if self.bulletCooldownTimer < cooldown then return end
 
     local obj = PoolMgr.Instance:GetObj(bulletType)
-    if obj == nil then return end
+    if not LuaBinding.IsAlive(obj) then return end
 
     SoundAudioPool.Instance:PlaySound(fireClip, cs.transform.position, volume)
-    obj.transform.position = cs.fireEffect.transform.position
+    if LuaBinding.IsAlive(cs.fireEffect) then
+        obj.transform.position = cs.fireEffect.transform.position
+    end
     obj.transform.forward = -cs.transform.forward
 
     -- 子弹逻辑在 Lua，转发初始化
@@ -126,8 +131,10 @@ function RobotController:decrease_health(amount)
     if self.currentHealth > 0 then return end
 
     local cs = self.cs
-    cs.sphereCollider.enabled = false
-    self.characterController.enabled = false
+    cs:SetSphereColliderEnabled(false)
+    if LuaBinding.IsAlive(self.characterController) then
+        self.characterController.enabled = false
+    end
 
     -- 死亡爆炸
     local explo = PoolMgr.Instance:GetObj(EXPLO_POOL)

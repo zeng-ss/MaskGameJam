@@ -10,6 +10,7 @@ local UnityEngine = CS.UnityEngine
 local NavMesh = UnityEngine.AI.NavMesh
 local NavMeshPath = UnityEngine.AI.NavMeshPath
 local LineRendererType = UnityEngine.LineRenderer
+local LuaBinding = CS.LuaBinding
 
 local AutoGenerateNavPath = {}
 
@@ -24,7 +25,7 @@ end
 function AutoGenerateNavPath:update()
     local cs = self.cs
     -- 每帧自动更新路径（起点/终点移动时路径自动刷新）
-    if cs.isStart and cs.startTarget ~= nil and cs.endTarget ~= nil then
+    if cs.isStart and LuaBinding.IsAlive(cs.startTarget) and LuaBinding.IsAlive(cs.endTarget) then
         self:generate_auto_nav_path(cs.startTarget.position, cs.endTarget.position)
     end
 end

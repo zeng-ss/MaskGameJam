@@ -62,7 +62,7 @@ function KeyBindingManager:update_binding(action, keyCode, actionName)
                 local keyName = self.cs:GetKeyCodeName(keyCode)
                 local conflictName = b.actionName
                 UIManager.Instance:openPanelByName("TipPanel", function(panel)
-                    if panel == nil then return end
+                    if not LuaBinding.IsAlive(panel) then return end
                     LuaBinding.CallLua(panel, "show_tip",
                         string.format("按键 %s 已被 %s 绑定！", keyName, conflictName))
                     panel.transform.localPosition = Vector2(0, 430)

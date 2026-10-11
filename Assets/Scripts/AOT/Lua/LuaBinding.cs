@@ -107,6 +107,9 @@ public class LuaBinding : IDisposable
     /// <summary>
     /// C# 侧调用 Lua 实例上的方法
     /// 例：LuaBinding.CallLua(timerPanel, "start_countdown", 10f);
+    ///
+    /// ⚠️ Lua 侧的方法都是 `function M:foo(...)` 形式，第一个参数是 self，
+    ///    所以这里会把实例表本身插到实参最前面（对应 Lua 里的 `inst:foo(...)`）。
     /// </summary>
     public static object[] CallLua(MonoBehaviour mb, string method, params object[] args)
     {
@@ -132,9 +135,19 @@ public class LuaBinding : IDisposable
             return null;
         }
 
-        object[] ret = fn.Call(args);
+        object[] ret = fn.Call(BuildCallArgs(inst, args));
         fn.Dispose();
         return ret;
+    }
+
+    /// <summary>把实例表作为 self 放到实参最前面</summary>
+    private static object[] BuildCallArgs(LuaTable self, object[] args)
+    {
+        int extra = args != null ? args.Length : 0;
+        object[] callArgs = new object[extra + 1];
+        callArgs[0] = self;
+        if (extra > 0) Array.Copy(args, 0, callArgs, 1, extra);
+        return callArgs;
     }
 
     private MonoBehaviour _owner;
@@ -158,12 +171,13 @@ public class LuaBinding : IDisposable
     ///   private void OnTriggerStay(Collider other) => _binding.InvokeLua("ontriggerstay", other);
     ///
     /// 与静态的 LuaBinding.CallLua 的区别：这个是实例方法，用实例级缓存，适合每帧/每次碰撞都触发的场景。
+    /// 参数同样会自动补上 self（实例表）。
     /// </summary>
     public void InvokeLua(string method, params object[] args)
     {
         LuaFunction fn = GetLuaFunction(method);
         if (fn == null) return;
-        fn.Call(args);
+        fn.Call(BuildCallArgs(LuaInstance, args));
     }
 
     private LuaFunction GetLuaFunction(string method)
@@ -171,7 +185,11 @@ public class LuaBinding : IDisposable
         if (_luaFuncCache.TryGetValue(method, out LuaFunction cached)) return cached;
 
         LuaFunction fn = LuaInstance != null ? LuaInstance.Get<LuaFunction>(method) : null;
-        _luaFuncCache[method] = fn; // 没有该方法时也缓存 null，避免每帧重复查表
+
+        // 只在实例已绑定后才缓存（无论有没有这个方法）：
+        // 实例还没绑定时缓存 null 会让这个方法永久失效，之后实例就绪也再取不到。
+        if (LuaInstance != null) _luaFuncCache[method] = fn;
+
         return fn;
     }
 

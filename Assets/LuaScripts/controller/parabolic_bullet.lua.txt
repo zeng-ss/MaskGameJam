@@ -115,7 +115,7 @@ function ParabolicBullet:explode()
     pool:PlaySound(pool.parabolicExploClip, warnPos, 0.3)
 
     local explo = PoolMgr.Instance:GetObj(EXPLO_POOL)
-    if explo ~= nil then
+    if LuaBinding.IsAlive(explo) then
         explo.transform.position = warnPos
     end
 

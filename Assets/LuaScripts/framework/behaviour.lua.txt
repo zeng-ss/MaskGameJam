@@ -23,19 +23,38 @@ local LIFECYCLE = {
 --- 创建一个 Lua 组件实例
 --- @param cs  C# 侧 LuaBehaviour 组件本体
 --- @param cls 具体模块的类表，成员方法用 ":" 定义
---- @return table 生命周期闭包表（C# 侧取的是无参函数，所以这里把 self 提前绑死）
+--- @return table 实例表本身（C# 侧 LuaBinding 直接引用它）
+---
+--- 返回的就是实例表 o，不是另建一张转发用的表 —— 保证 C# 侧和 Lua 侧拿到的是同一个对象，
+--- 否则 `self.xxx = ...` 写到不同的表上，运行时状态会分裂。
 function M.new(cs, cls)
     local o = { cs = cs }
     setmetatable(o, { __index = cls })
 
-    local handlers = {}
+    -- 1) 生命周期：无参闭包，self 提前绑死
+    --    （C# 侧 LuaBinding 是按 Action 取的，无法自己传 self）
     for _, name in ipairs(LIFECYCLE) do
-        handlers[name] = function()
+        o[name] = function()
             local fn = cls[name]
             if fn then fn(o) end
         end
     end
-    return handlers
+
+    -- 2) 普通方法：原样挂到实例上（**不绑 self**），self 由调用方传。
+    --    这样两种调用方式指向同一个 self：
+    --      Lua 侧  inst:start_countdown(5)
+    --      C#  侧  LuaBinding.CallLua(comp, "start_countdown", 5)
+    --    ⚠️ 少了这一步，C# 侧跨语言调用全部失败，报「Xxx 的 Lua 模块里没有方法 yyy()」。
+    --    典型症状：TimerPanel:start_countdown 调不到 → 倒计时不动；
+    --              EnemyBulletController:init 调不到 → self.bulletType 是 nil →
+    --              PoolMgr.PushObj(nil, obj) 抛 "Value cannot be null. Parameter name: key"。
+    for k, v in pairs(cls) do
+        if type(v) == "function" and o[k] == nil then
+            o[k] = v
+        end
+    end
+
+    return o
 end
 
 return M
