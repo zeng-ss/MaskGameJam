@@ -1,0 +1,440 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Res
+  m_EditorClassIdentifier: 
+  m_GroupName: Res
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 4feefa853586f5b4dbc198b732fa836e
+  m_SerializeEntries:
+  - m_GUID: 01b9ac53d33b3e348ac3f829b220ca6a
+    m_Address: list_item_background
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 02d508b28c1f1494ab2ecfeb5e16713d
+    m_Address: loading_bar_inner
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 04d207d34845c4f0f9b36b9c050cd158
+    m_Address: square_frame_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 0bfd9b1f92738a04da6adeec5da546a1
+    m_Address: round_button_selected
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 107a3b99d9e7aee488e658ffc76cbcb4
+    m_Address: square_button_neutral
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 14ef6faeaae93b5419f63ac780d0017c
+    m_Address: round_frame
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15ec14e5b409878459a708d32847779e
+    m_Address: faction_a
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 15f8ecd19bc987d4a855e3b2f78473bc
+    m_Address: list_item_background_selected
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1631b774c445a534099e3f1ddae2f949
+    m_Address: round_button
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2140eb696087f504fb45b4434b31ee9f
+    m_Address: icon_caster
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 22f7d32988cd362469d9dede3aa4cc18
+    m_Address: "\u5173\u95ED\u9762\u677F"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2855beda86fcd8d4b831e4dd52d35952
+    m_Address: skill_bar_fill
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 288f7497e4e9bd54291616eb50c26172
+    m_Address: "\u6253\u5B57\u673A\u5355\u952E"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2af6e63f00e80844fa3c585d3f175646
+    m_Address: "\u80CC\u666F"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2fcf4625768fcc747a41422dedbf1626
+    m_Address: checkbox_checked_square
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3026511ff623dae45b55d6e8c69db974
+    m_Address: resourc_bar_frame_neutral
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 30daaedf622fe4a4e8d2cc1d8803335b
+    m_Address: round_content
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3628ef74d72c2b542a804664f4d4b101
+    m_Address: scroll_fill
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 38d739ba9b60d01409f6dad1cedbcb8e
+    m_Address: icon_male
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4037f1d5675a198458a8fa101437438b
+    m_Address: square_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 445cd1718f8643543943bb99908f8785
+    m_Address: faction_b
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 451cccb0eaa2acf43b799e06bb8af4e3
+    m_Address: ability_sword_double
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 45d19e450bae6d647aada7729ee88538
+    m_Address: tooltip_box
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 47e3a1f4d6400b14d92e36b54c2d2075
+    m_Address: side_bar
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b0cca04c685b4d02969d137528985e4
+    m_Address: square_background_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4b13a69945a280a46bc2eb7763cf77a8
+    m_Address: circle_mask
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4d4dfb32b7c8c084380595c38f8fce4d
+    m_Address: "\u6309\u94AE\u9009\u62E9"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e669f22e6bb3a04189282086d3b677e
+    m_Address: info_box
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4e966575922f83b44b6d54a853ba5c7d
+    m_Address: icon_close
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5198335602a80b14690b9a5b63e8a74e
+    m_Address: icon_hunter
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 52372e41d43225843ac11da166feeb1c
+    m_Address: dialog_header_background
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 544c7658577bb184c87949ec3c93d319
+    m_Address: square_button_selected
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 548bbf24e96e3dd438c23bc9bc21be16
+    m_Address: loading_bar_frame
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55c6b0d05d3560f47b0d0ad8dce0301a
+    m_Address: "\u9875\u6253\u5F00"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 55d87ae52919e884dbac076e6bef26b5
+    m_Address: ability_background 1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5a5d5dc99836d2b4797a19ecf2b6faaf
+    m_Address: rect_input
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d92ffc10889f23458f996c748acfd26
+    m_Address: progress_pivot_glow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5e9974bc805781d47a0eed44e7dd73ab
+    m_Address: checkbox_checkmark_square
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 65a16ecc28bddba4388f3c2fb7d3989e
+    m_Address: faction_c
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 67287f7ee45179941957350e78ba4fef
+    m_Address: hero_avatar
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6cd4ccb3862f7864e9bd4bf821f8e065
+    m_Address: "\u51C6\u5FC3"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d0973c1e56c266458a98a4e140605e7
+    m_Address: page_arrow_thin
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d6287a9ac5070f45abd925aaaaf4090
+    m_Address: ability_slash
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 72a5b884f12dfe04cbfb9b61a4c78532
+    m_Address: icon_question
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 73b16d40ad0b2114ab7b1899ca96b714
+    m_Address: page_arrow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 747cf0b76adcf4848811096362a05091
+    m_Address: fade_line_bi_linear
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7a839466c6a6a5c44a4eed23394edb93
+    m_Address: checkbox_checkmark_check
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7bbb9310944d6c044b63a180bf05a1df
+    m_Address: "\u4EBA\u7C7B\u6B7B\u4EA1"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7d6eda0888186dc47bc17fd22bb82bfc
+    m_Address: background
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8219879191dbffe47a8c132f2ec9d79c
+    m_Address: icon_skills_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 885c05904983ea34fb7832c5e24f32f7
+    m_Address: dialog_header_background 1
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8f8e130d3d0c9c247b78be9804308002
+    m_Address: ability_fireball
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8fd7febb455068b4599dda0c61d40341
+    m_Address: scroll_handle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 90bb2e95161250447abd94a555ad789c
+    m_Address: icon_close_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 950fbb72cc7ef5f43be87b587983af5f
+    m_Address: icon_female
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 995466ea7471711458fc978ea4bd2890
+    m_Address: tooltip_pointer
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9a01fb5c39cdfa84e94f2cba2ac86bf8
+    m_Address: check
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9fec9b531ee671a499b9ed48fd5da361
+    m_Address: icon_warrior
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a1c619ba266d8f343a7c27c3752bdcb1
+    m_Address: checkbox
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a34945a417c6f284d844fac05b0826ee
+    m_Address: icon_bottle
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a50a0c7676eed3c41bb5cc109bffe667
+    m_Address: resourc_bar_frame
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a78e1df9d391117438f8c74cbfd2a93d
+    m_Address: rect_button
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b2168b0e89cb41a46b207985b98c7213
+    m_Address: "\u8B66\u62A5\u58F0"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b4c31a46ab9e2ec4cb864b2c1957afc8
+    m_Address: "\u56FE\u6807"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6d41c56108027f43a47a807df3af3a2
+    m_Address: icon_error
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b72b9c6e8bdeb3347a6c3e9b5273364b
+    m_Address: page_arrow_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c393e9028c5d2bf4ba1c2908e443a28e
+    m_Address: "\u51AC\u5965\u4F1A-\u901F\u5EA6\u6ED1\u51B0"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7335382e71321b4a94c68fbffb5e85b
+    m_Address: icon_close_light
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c7983f142b364304a82bb8158574b413
+    m_Address: ability_lightning
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d379c3f0279e4fe4c87742b7479f7609
+    m_Address: notification_line
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: d96f6aabc43915a45a05d6df44c42f8d
+    m_Address: ability_shield
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: def41a5efc187694795c5ef7c91ce1b6
+    m_Address: "\u517D\u4EBA\u6B7B\u4EA1"
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e12aeb8f85d8f534c924037f7e3baa74
+    m_Address: icon_info
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1dec67342323c047860e06717826090
+    m_Address: fade_line
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e30d7baabfb292c4f9687033f726d8a4
+    m_Address: ability_sword
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e76ba91aa2d37cd40b4a6ac7abe0a08d
+    m_Address: triangle_side
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ea35f660cf08373488e5a4b131f4d733
+    m_Address: icon_settings_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec4e46f7b0a59f44581cb894a3e10de8
+    m_Address: scroll_background
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec5d8e847ee5dab4793020c5bb9b87f5
+    m_Address: resource_bar_fill
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f2ef1d500d79f9f448cfb7a350bfd9a8
+    m_Address: triangle_grayscale
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f6299e83740fe8f4fbe5130ebe788b53
+    m_Address: ability_background
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fcd669d7406d5cc45abe0908138db13e
+    m_Address: triangle_filled
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: fdfca4c8a41331a48b005ad18b939196
+    m_Address: resource_bar_fill_mask
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 5eac58ec86874604d8a8a81be96319e7, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 7116b5951036d8d46b0bef40faa01a9f, type: 2}
+    - {fileID: 11400000, guid: dc3c1bb7a27e3724f8b0be0b0e126ea7, type: 2}

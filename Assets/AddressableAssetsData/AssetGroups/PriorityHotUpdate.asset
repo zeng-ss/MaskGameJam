@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: PriorityHotUpdate
+  m_EditorClassIdentifier: 
+  m_GroupName: PriorityHotUpdate
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 88aec77549487e347a105f16e7435021
+  m_SerializeEntries:
+  - m_GUID: 1bb2d7d64958b8243bc338125eeb3701
+    m_Address: HotUpdateWindow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 56ba0e8dd9306a9418a1d4a91132026e
+    m_Address: DllConfig
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9af84704604996c46aa51476a8e8fe7f
+    m_Address: PriorityHotUpdate.dll
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 5eac58ec86874604d8a8a81be96319e7, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 768c9809a0cfbb64ebf1458eaf488db9, type: 2}
+    - {fileID: 11400000, guid: 70eed5a2d57f25746a10ce7b6c8fbf85, type: 2}

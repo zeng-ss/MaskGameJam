@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: HotUpdate
+  m_EditorClassIdentifier: 
+  m_GroupName: HotUpdate
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 9e739fcc5e6b43d43a027f3fef72ff4e
+  m_SerializeEntries:
+  - m_GUID: 1e3a482117cf04f4abb5fba0724920cf
+    m_Address: SoundAudioPool
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6c1e9230b49689e41828317162b10f14
+    m_Address: GameManager
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 81f825af384caac4ebe8920099fcafb3
+    m_Address: EnemyConfig
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 97b62406eb6cbfa43b26e03db0ad3752
+    m_Address: Version
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9cd52ccbe4d944943a67b699576c7dfc
+    m_Address: HotUpdate.dll
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: cc5c99ae9f475f340872e75c76884010
+    m_Address: VersionInfo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: eb2ff82b72b4d5f46adefa43872bbacd
+    m_Address: GameLanuch
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 5eac58ec86874604d8a8a81be96319e7, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 0c3aa715cd697424c9f5e42a4f80741b, type: 2}
+    - {fileID: 11400000, guid: 48d7d7a2bdca08c48b8299e254199dc3, type: 2}

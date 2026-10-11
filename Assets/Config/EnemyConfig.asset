@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dda88c8e3f115de4786f0f63dc09e3e2, type: 3}
+  m_Name: EnemyConfig
+  m_EditorClassIdentifier: 
+  EnemyConfigs:
+  - name: Cow
+    damage: 10
+    moveSpeed: 5
+    health: 200
+  - name: MultiRobot
+    damage: 2
+    moveSpeed: 0
+    health: 50
+  - name: SingleRobot
+    damage: 5
+    moveSpeed: 0
+    health: 50
+  - name: StarFish
+    damage: 6
+    moveSpeed: 6
+    health: 120
+  - name: TurtleShell
+    damage: 7
+    moveSpeed: 8
+    health: 100
+  - name: BlueSlime
+    damage: 7
+    moveSpeed: 7
+    health: 140
+  - name: Mask
+    damage: 15
+    moveSpeed: 30
+    health: 200

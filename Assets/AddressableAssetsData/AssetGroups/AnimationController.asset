@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: AnimationController
+  m_EditorClassIdentifier: 
+  m_GroupName: AnimationController
+  m_Data:
+    m_SerializedData: []
+  m_GUID: 5691175526b6d7245bf99260d9535c69
+  m_SerializeEntries:
+  - m_GUID: 3b1f47c67c285b0429de006c783b043d
+    m_Address: TurtleShellController
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 433fe2d9029d7d24095955be326ba5ec
+    m_Address: CowController
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 919f713bb1fd9e94b8219b073690f24c
+    m_Address: BlueSlimeController
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c268c58f828154f4783654f8a6071ca2
+    m_Address: StarFishController
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 5eac58ec86874604d8a8a81be96319e7, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: aee99b3f526761a46b9e303dd5790d9b, type: 2}
+    - {fileID: 11400000, guid: f41e4b9515a62c0499b64f9d1142a198, type: 2}

@@ -1,0 +1,63 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8287576471361437207
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5866007407634430665}
+  - component: {fileID: 981891183289267697}
+  m_Layer: 0
+  m_Name: SoundAudioPool
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5866007407634430665
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8287576471361437207}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -1.681785, y: 3.0204582, z: 0.2821267}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &981891183289267697
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8287576471361437207}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b5ecbc35ba026e40be4429aa5d72006, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  singleFireClip: {fileID: 8300000, guid: c058beb22e1ce5242a1ff6b594759835, type: 3}
+  multiFireClip: {fileID: 8300000, guid: 0155bcaefb385764299abfc5b1146e64, type: 3}
+  parabolicClip: {fileID: 8300000, guid: 15ec042c5330b894397fe2b560e22a98, type: 3}
+  parabolicExploClip: {fileID: 8300000, guid: fdc616161abe92e4f911164effc34bfb, type: 3}
+  robotExploClip: {fileID: 8300000, guid: d7bc400deebd8824f8e9b94155875079, type: 3}
+  showPanelClip: {fileID: 8300000, guid: 55c6b0d05d3560f47b0d0ad8dce0301a, type: 3}
+  btnSeletClip: {fileID: 8300000, guid: 4d4dfb32b7c8c084380595c38f8fce4d, type: 3}
+  panelHideClip: {fileID: 8300000, guid: 22f7d32988cd362469d9dede3aa4cc18, type: 3}
+  warningClip: {fileID: 8300000, guid: b2168b0e89cb41a46b207985b98c7213, type: 3}
+  hoverClip: {fileID: 8300000, guid: 288f7497e4e9bd54291616eb50c26172, type: 3}
+  hitPlayerClip: {fileID: 8300000, guid: 22f7d32988cd362469d9dede3aa4cc18, type: 3}
+  cowDieClip: {fileID: 8300000, guid: def41a5efc187694795c5ef7c91ce1b6, type: 3}
+  playerDieClip: {fileID: 8300000, guid: 7bbb9310944d6c044b63a180bf05a1df, type: 3}
+  enemyDieClip: {fileID: 8300000, guid: 3c9268f0b913a8e4f8f4320b83103881, type: 3}
+  audioPlayerPrefab: {fileID: 6647520748136902491, guid: 602e06facfd546f4f82408a7cf7a229b,
+    type: 3}
+  previousVolume: 1
