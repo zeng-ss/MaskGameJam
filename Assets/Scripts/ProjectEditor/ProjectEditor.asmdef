@@ -2,7 +2,6 @@
     "name": "ProjectEditor",
     "rootNamespace": "",
     "references": [
-        "GUID:2373f786d14518f44b0f475db77ba4de",
         "GUID:69448af7b92c7f342b298e06a37122aa",
         "GUID:d56638ee55664ec498fe40b938357a92"
     ],

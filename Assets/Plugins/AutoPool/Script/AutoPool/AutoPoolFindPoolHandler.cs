@@ -21,7 +21,7 @@ namespace AutoPool_Tool
                 return null;
             }
 
-            int prefabID = poolPrefab.GetInstanceID();
+            EntityId prefabID = poolPrefab.GetEntityId();
 
             PoolInfo pool = default;
             if (_autoPool.PoolDic.ContainsKey(prefabID) == false)
@@ -36,7 +36,7 @@ namespace AutoPool_Tool
 
         public PoolInfo FindResourcesPool(string resources)
         {
-            Dictionary<string, int> resourcePool = _autoPool.ResourcesPoolDic;
+            Dictionary<string, EntityId> resourcePool = _autoPool.ResourcesPoolDic;
             PoolInfo pool = default;
             if (resourcePool.ContainsKey(resources) == false)
             {
@@ -47,7 +47,7 @@ namespace AutoPool_Tool
                     return null;
                 }
 
-                int prefabID = prefab.GetInstanceID();
+                EntityId prefabID = prefab.GetEntityId();
 
                 _autoPool.RegisterPool(prefab, prefabID);
 

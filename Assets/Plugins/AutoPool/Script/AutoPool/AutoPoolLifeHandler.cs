@@ -14,7 +14,7 @@ namespace AutoPool_Tool
             _autoPool = autoPool;
         }
 
-        public IEnumerator IsActiveRoutine(int id)
+        public IEnumerator IsActiveRoutine(EntityId id)
         {
             float delayTime = _delayTime;
             float timer = _maxTimer;

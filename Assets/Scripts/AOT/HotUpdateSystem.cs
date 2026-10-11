@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using HybridCLR;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.ResourceLocators;
@@ -71,8 +70,6 @@ public class HotUpdateSystem : MonoBehaviour
         // 无论是否热更，都需要进入此处
         // 加载热更程序集
         LoadHotUpdateAssembly();
-        // 加载 AOT 程序集元数据（为 HybridCLR准备）
-        LoadMetadataForAOTAssemblies();
         
         if (hotUpdateWindow == null) // 如果有窗口就按照窗口的进度来，如果没有窗口就直接开始游戏
         {
@@ -307,41 +304,6 @@ public class HotUpdateSystem : MonoBehaviour
         Addressables.LoadContentCatalogAsync(catalogPath).WaitForCompletion();  // 加载本地的 catalog
     }
     
-    /// <summary>
-    /// 加载AOT程序集元数据
-    /// 为HybridCLR准备AOT元数据，使得热更代码可以引用AOT代码
-    /// 只在非编辑器环境执行
-    /// </summary>
-    private void LoadMetadataForAOTAssemblies()
-    {
-#if UNITY_EDITOR
-        return;  // 编辑器环境下不需要
-#endif
-        // 如果 dllConfig还没加载（没有执行优先热更的情况），先加载它
-        if (dllConfig == null) // 避免没有加载过优先热更
-        {
-            dllConfig = Addressables.LoadAssetAsync<DllConfig>(dllConfigKey).WaitForCompletion();
-        }
-        
-        // 遍历所有 AOT DLL，加载它们的元数据
-        foreach (string dllName in dllConfig.aot)
-        {
-            TextAsset textAsset = Addressables.LoadAssetAsync<TextAsset>(dllName).WaitForCompletion();
-            if (textAsset != null)
-            {
-                // 为 HybridCLR加载 AOT程序集的元数据
-                LoadImageErrorCode err = RuntimeApi.LoadMetadataForAOTAssembly(textAsset.bytes, HomologousImageMode.SuperSet);
-                Debug.Log($"LoadMetadataForAOTAssembly:{textAsset.name}. ret:{err}");
-                // 释放 textAsset资源，避免内存泄漏
-                Addressables.Release(textAsset);
-            }
-            else
-            {
-                Debug.LogError($"加载AOT元数据DLL失败: {dllName}");
-            }
-        }
-    }
-
     /// <summary>
     /// 加载热更程序集
     /// 加载所有热更DLL到运行时，包括优先热更和普通热更

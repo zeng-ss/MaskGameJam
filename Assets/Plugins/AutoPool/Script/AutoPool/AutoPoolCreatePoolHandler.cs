@@ -13,7 +13,7 @@ namespace AutoPool_Tool
             _autoPool = autoPool;
         }
 
-        public PoolInfo RegisterPool(GameObject poolPrefab, int prefabID)
+        public PoolInfo RegisterPool(GameObject poolPrefab, EntityId prefabID)
         {
             Transform newParent = new GameObject(poolPrefab.name).transform;
             newParent.SetParent(_autoPool.transform, true); // parent

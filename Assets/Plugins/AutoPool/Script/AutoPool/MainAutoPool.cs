@@ -45,9 +45,9 @@ namespace AutoPool_Tool
         }
 
 
-        public Dictionary<int, PoolInfo> PoolDic = new Dictionary<int, PoolInfo>();
+        public Dictionary<EntityId, PoolInfo> PoolDic = new Dictionary<EntityId, PoolInfo>();
 
-        public Dictionary<string, int> ResourcesPoolDic = new Dictionary<string, int>();
+        public Dictionary<string, EntityId> ResourcesPoolDic = new Dictionary<string, EntityId>();
 
         public Dictionary<Type, GenericPoolInfo> GenericPoolDic = new Dictionary<Type, GenericPoolInfo>();
 
@@ -156,12 +156,12 @@ namespace AutoPool_Tool
         public GenericPoolInfo FindGenericPool<T>() where T : class, IPoolGeneric, new() => _findPoolHandler.FindGenericPool<T>();
         public bool FindObject(PoolInfo info) => _findPoolHandler.FindObject(info);
         public bool FindGeneric<T>(GenericPoolInfo poolInfo) where T : class, IPoolGeneric, new() => _findPoolHandler.FindGeneric<T>(poolInfo);
-        public PoolInfo RegisterPool(GameObject poolPrefab, int prefabID) => _createPoolHandler.RegisterPool(poolPrefab, prefabID);
+        public PoolInfo RegisterPool(GameObject poolPrefab, EntityId prefabID) => _createPoolHandler.RegisterPool(poolPrefab, prefabID);
         public GenericPoolInfo RegisterGenericPool<T>() where T : class, IPoolGeneric, new() => _createPoolHandler.RegisterGenericPool<T>();
         public PooledObject AddPoolObjectComponent(GameObject instance, PoolInfo info) => _createPoolHandler.AddPoolObjectComponent(instance, info);
         public void SleepRigidbody(PooledObject instance) => _setRbHandler.SleepRigidbody(instance);
         public void WakeUpRigidBody(PooledObject instance) => _setRbHandler.WakeUpRigidBody(instance);
-        public IEnumerator IsActiveRoutine(int id) => _lifeHandler.IsActiveRoutine(id);
+        public IEnumerator IsActiveRoutine(EntityId id) => _lifeHandler.IsActiveRoutine(id);
         public IEnumerator IsActiveGenericRoutine<T>() where T : class, IPoolGeneric, new() => _lifeHandler.IsActiveGenericRoutine<T>();
 
 
