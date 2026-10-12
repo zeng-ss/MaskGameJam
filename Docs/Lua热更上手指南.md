@@ -267,6 +267,71 @@ end
 
 ---
 
+### 5.5 `self.cs` 是哪来的？（顺手区分大小写两个 `cs`/`CS`）
+
+新手最容易卡的一点：`self.cs` 里的 `cs` **不是 xLua 的关键字，也不是什么魔法** ——
+它就是我们自己在 `framework/behaviour.lua` 里起的**一个普通字段名**。
+
+#### 它怎么传进来的（四步）
+
+```csharp
+// ① C# 壳：把「组件自己」交给绑定器（LuaBehaviour.cs:25）
+_binding.Bind(this, DefaultLuaModule);          // this = 挂在预制体上的那个 C# 组件
+```
+```csharp
+// ② LuaBinding.Bind：把这个组件当作参数，调用 Lua 模块末尾返回的工厂函数（LuaBinding.cs:237）
+object[] ret = factory.Call(owner);             // owner 就是 ① 里的 this
+```
+```lua
+-- ③ Lua 模块末尾：工厂函数的形参叫 cs（这是命名约定，随便叫什么都行）
+return function(cs)
+    return behaviour.new(cs, EscPanel)
+end
+```
+```lua
+-- ④ behaviour.lua：把 cs 存进实例表的一个字段里，字段名也叫 cs
+function M.new(cs, cls)
+    local o = { cs = cs }       -- ← self.cs 就是这里来的
+    ...
+    return o                    -- 返回的就是这张实例表
+end
+```
+
+所以 `self.cs` 的完整含义是：
+
+```
+self       = ④ 返回的那张实例表 o
+self.cs    = o.cs 字段           = ① 里的那个 C# 组件本体（userdata）
+```
+
+**为什么要这么绕**：Lua 逻辑需要拿到「挂在预制体上的那个 C# 组件」，
+才能读到 Inspector 里配好的字段（`cs.startBtn`、`cs.healthImage`…）和它上面挂的组件。
+
+**能改名吗**：能。把 `behaviour.lua` 的 `{ cs = cs }` 改成别的键名，
+再把所有 Lua 里的 `self.cs` 跟着改即可。项目约定叫 `cs`，没必要动。
+
+#### ⚠️ 别和 `CS`（大写）搞混
+
+| 写法 | 是什么 | 例子 |
+|---|---|---|
+| **`self.cs`**（小写，实例字段） | **当前这个 Lua 组件对应的 C# 组件本体** | `self.cs.startBtn`、`self.cs:GetComponent(...)` |
+| **`CS`**（大写，xLua 全局表） | **xLua 提供的入口，用来访问所有 C# 类型** | `CS.UnityEngine.Time.deltaTime`、`CS.UIManager.Instance` |
+
+两者完全无关，只是一个大小写之差。看到 `CS.` 就是「我要访问某个 C# 类」，
+看到 `self.cs` 就是「我要访问我自己那个 C# 组件」。
+
+#### 用它时的两条规则
+
+```lua
+local cs = self.cs
+
+cs.startBtn                      -- 字段 / 属性 → 用点号
+cs.transform.localScale = v      -- 属性 → 点号
+cs:GetComponent(typeof(CS.TMPro.TMP_Text))   -- 方法 → 冒号（见坑 11）
+```
+
+---
+
 ## 6. Lua 语法 10 分钟速成（给 C# 开发者）
 
 ### 6.1 变量

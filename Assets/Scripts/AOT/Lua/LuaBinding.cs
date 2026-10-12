@@ -154,7 +154,7 @@ public class LuaBinding : IDisposable
     /// <summary>把实例表作为 self 放到实参最前面</summary>
     private static object[] BuildCallArgs(LuaTable self, object[] args)
     {
-        int extra = args != null ? args.Length : 0;
+        int extra = args?.Length ?? 0;
         object[] callArgs = new object[extra + 1];
         callArgs[0] = self;
         if (extra > 0) Array.Copy(args, 0, callArgs, 1, extra);
@@ -274,8 +274,7 @@ public class LuaBinding : IDisposable
 
         BootWatchdog.Enter($"LuaBinding.GetOrCreateFactory({luaModule})");
 
-        object[] ret = luaEnv.DoString($"return require '{luaModule}'",
-            $"LuaBinding:Factory:{luaModule}");
+        object[] ret = luaEnv.DoString($"return require '{luaModule}'", $"LuaBinding:Factory:{luaModule}");
         BootWatchdog.Leave();
 
         if (ret == null || ret.Length == 0 || !(ret[0] is LuaFunction fn))

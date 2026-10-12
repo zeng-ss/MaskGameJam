@@ -3,6 +3,12 @@
 > 详细历史见 `2026-10-11.md` / `2026-10-12.md`（按日追加）。本文只留**跨会话仍然有效**的结论与坑。
 
 ## 1. 环境与版本
+- **项目身份（用于对外描述/简历）**：这是 **26GameJam 参赛作品**，游戏名 **「忆火封城：烬面突围」**
+  （README 里写的；简历早期写的名字是「无尽火域」）。原始 HybridCLR 版在 `D:/Unity/Mask_GameJam`
+  （README 首行标 `# UnityGameJam`，对应仓库 `zeng-ss/UnityGameJam`，Unity 2022.3.62f3c1）；
+  本目录是 **Android + Unity 6 + xLua 重构版**，git remote `zeng-ss/MaskGameJam`。
+  两者同一个游戏：4 个场景（StartScene / EndlessScene / BattleScene / HotUpdateScene）、
+  `MaskSystemManager` / `EnemySpawner` 完全对应。
 - Unity **6000.5.9f1**（`D:/APP/Unity Hub/6000.5.9f1`）；由团结引擎 `2022.3.62f3c1` 迁来。
 - 迁移首次启动会报 `projectVersion '2022.3.62f3c1' is not a valid Unity version`，改 ProjectVersion.txt 后自愈。
 - **Git LFS 必须 `git lfs pull`**：否则 Unity 报 "File may be corrupted or was serialized with a newer version of Unity"，实际是 134 字节的 LFS 指针。
