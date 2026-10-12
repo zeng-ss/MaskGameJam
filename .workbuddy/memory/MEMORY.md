@@ -136,6 +136,30 @@ xLua 源码 + 生成代码 + 项目代码全部在 `Assembly-CSharp`。已删除
 `LuaEnv.Dispose()` 抛 `try to dispose a LuaEnv with C# callback!`。
 → `XLuaManager.Dispose()`：**先 `LuaBinding.DisposeAll()` 再 `_luaEnv.Dispose()`**，并包 try/catch。
 
+### 5.4 `IEnumerator` 方法当语句调用 = 什么都不发生（Unity 也不报错）
+`GameLanuchCoroutine();`（返回 `IEnumerator`）单独作语句 → **枚举器创建出来就被丢掉，协程不会执行**。
+症状：热更下载到 100%、点了窗口上的「进入游戏」，游戏不启动，**没有任何报错**。
+必须 `StartCoroutine(GameLanuchCoroutine())`。
+（这是把原来的 `void GameLanuch()` 改成协程时漏改引入的 —— 原写法 `Show(downloadSize, GameLanuch)`
+把方法组直接当 `Action` 传，能跑；改成协程后回调里必须显式 StartCoroutine。）
+
+### 5.5 热更窗口什么时候才会出现
+`HotUpdateSystem` 的窗口**只在两件事同时成立时**才被创建和显示：
+1. `CheckForCatalogUpdates` 发现远程 catalog 的 hash 与本地不同；
+2. `GetDownloadSizeAsync > 0`（新 catalog 引用的 bundle 不在本地缓存里）。
+本地开发基本看不到它：`Use Asset Database` 不走 bundle；`Use Existing Build` 时本地 catalog
+就是刚构建的那份，与服务器一致 → 日志打 `无需更新 - catalog已是最新版本` → 整个下载分支被跳过
+→ `_hotUpdateWindow` 始终为 null → 直接 `GameLanuchCoroutine()` 进游戏。**这是设计如此。**
+想看窗口：① 走真热更流程（打客户端 → 改东西重建 → 新 ServerData 推到服务器 → 运行**客户端 exe**）；
+② 或勾 `HotUpdateSystem.debugForceHotUpdateWindow`（调试开关，强制显示一次窗口供预览 UI）。
+窗口的 `OnEnd` 回调是「进度走满后出现的『进入游戏』按钮」被点击时才触发的。
+
+### 5.6 启动链路里不要留 `WaitForCompletion`
+已完成清理：`GameLanuch` 的实例化、热更窗口的实例化、`VersionInfo`/`Version` 的读取全部改成异步。
+原因不止「阻塞主线程」——同步等待期间主线程不回主循环，而 bundle 下载/`UnityWebRequest` 的完成
+要靠主循环推进，**存在「等一个永远不会完成的操作」的死锁风险**。
+`Assets/Scripts/AOT/HotUpdateSystem.cs` 里现已无任何真实 `WaitForCompletion`（只剩注释）。
+
 ## 6. 启动期「编辑器卡死」的排查方法（2026-10-12 建立）
 - **先分类**：死循环 = CPU 跑满一个核；**死锁/同步阻塞 = CPU 空闲、窗口无响应、日志停住且无任何报错**。
   用 `Get-Process Unity | Select CPU` 采样 3 秒即可区分（增量≈3s → 死循环；≈0 → 阻塞）。

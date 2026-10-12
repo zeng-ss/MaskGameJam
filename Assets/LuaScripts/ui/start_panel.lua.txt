@@ -48,6 +48,7 @@ end
 function StartPanel:onStartClick()
     self:playClickSound()
 
+    UnityEngine.Debug.LogWarning("[热更测试] start_panel 的 onStartClick 执行了")
     CS.UIManager.Instance:openPanelByName("TipPanel", function(panel)
         -- panel 是 C# 的 BasePanel，反查它的 Lua 实例再调用 Lua 方法
         local luaPanel = CS.LuaBinding.GetLuaInstance(panel)

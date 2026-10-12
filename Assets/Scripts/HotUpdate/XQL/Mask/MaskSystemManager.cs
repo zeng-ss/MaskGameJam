@@ -15,18 +15,17 @@ using UnityEngine;
 /// </summary>
 public class MaskSystemManager : LuaBehaviour
 {
-    [Header("【面具基础配置】")]
-    public List<MaskData> allMaskDatas;      // 所有初始面具数据
-    public int maxPatternCount = 30;         // 最大花纹数量
+    [Header("【面具基础配置】")] public List<MaskData> allMaskDatas; // 所有初始面具数据
+    public int maxPatternCount = 30; // 最大花纹数量
 
-    [Header("【花纹基础配置】")]
-    public List<PatternData> allPatternDatas; // 所有花纹数据
+    [Header("【花纹基础配置】")] public List<PatternData> allPatternDatas; // 所有花纹数据
     public float sameFactionProbability = 0.75f; // 对应面具派系花纹出现概率
 
-    [Header("【变化系配置】")]
-    public List<BuffType> randomBuffTypes;   // 变化系可随机的增益类型
-    public float randomBuffMinValue = 5f;    // 变化系随机增益最小值
-    public float randomBuffMaxValue = 15f;   // 变化系随机增益最大值
+    [Header("【变化系配置】")] public List<BuffType> randomBuffTypes; // 变化系可随机的增益类型
+    public float randomBuffMinValue = 5f; // 变化系随机增益最小值
+    public float randomBuffMaxValue = 15f; // 变化系随机增益最大值
+
+    protected override string DefaultLuaModule => "mask_system_manager";
 
     /// <summary>是否已选择初始面具（Lua 侧也读写这个属性，保持单一真相源）</summary>
     public bool IsMaskSelected { get; set; }
@@ -57,8 +56,10 @@ public class MaskSystemManager : LuaBehaviour
     public MaskFaction GetMaskDataFaction(int i) => allMaskDatas[i].maskFaction;
     public string GetMaskDataName(int i) => allMaskDatas[i].maskName;
     public string GetMaskDataDesc(int i) => allMaskDatas[i].maskDesc;
+
     public int GetMaskBaseBuffCount(int i)
         => allMaskDatas[i].baseBuffs != null ? allMaskDatas[i].baseBuffs.Count : 0;
+
     public BuffType GetMaskBaseBuffType(int i, int j) => allMaskDatas[i].baseBuffs[j].buffType;
     public float GetMaskBaseBuffValue(int i, int j) => allMaskDatas[i].baseBuffs[j].buffValue;
     public bool GetMaskBaseBuffIsPercent(int i, int j) => allMaskDatas[i].baseBuffs[j].isPercent;
@@ -71,8 +72,10 @@ public class MaskSystemManager : LuaBehaviour
     public string GetPatternDesc(int i) => allPatternDatas[i].patternDesc;
     public MaskFaction GetPatternFaction(int i) => allPatternDatas[i].patternFaction;
     public bool GetPatternIsRandomEffect(int i) => allPatternDatas[i].isRandomEffect;
+
     public int GetPatternBuffCount(int i)
         => allPatternDatas[i].patternBuffs != null ? allPatternDatas[i].patternBuffs.Count : 0;
+
     public BuffType GetPatternBuffType(int i, int j) => allPatternDatas[i].patternBuffs[j].buffType;
     public float GetPatternBuffValue(int i, int j) => allPatternDatas[i].patternBuffs[j].buffValue;
     public bool GetPatternBuffIsPercent(int i, int j) => allPatternDatas[i].patternBuffs[j].isPercent;

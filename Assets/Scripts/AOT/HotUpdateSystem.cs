@@ -22,6 +22,13 @@ public class HotUpdateSystem : MonoBehaviour
     private const string HotUpdateWindowKey = "HotUpdateWindow"; // 热更新窗口的 Addressable Key
     private const string LuaGroupKey = "Lua"; // Lua脚本分组的 Addressables Label
 
+    [Header("调试开关")] [Tooltip("勾上后，即使没有需要下载的资源，也强制把热更窗口显示一次（仅用于预览 UI；正式发包请保持关闭）")]
+    public bool debugForceHotUpdateWindow = false;
+
+    // 异步读取到的版本信息（见 LoadVersionInfo），展示到热更窗口上
+    private string _cachedVersionInfo;
+    private string _cachedVersion;
+
     private string PersistentDataPath =>
         $"{Application.persistentDataPath}/com.unity.addressables"; // 持久化数据路径，Addressables的缓存目录
 
@@ -75,6 +82,15 @@ public class HotUpdateSystem : MonoBehaviour
         // 无论是否热更，都需要进入此处
         yield return LoadLuaScripts();
 
+        // 【调试】没有需要下载的资源时，也强制把热更窗口走一遍，方便预览它的样子。
+        // 正常流程下窗口只在「算出要下载的字节数 > 0」时才会被创建 ——
+        // 本地 catalog 已是最新时根本看不到它（这就是它"没加载出来"的原因）。
+        if (_hotUpdateWindow == null && debugForceHotUpdateWindow)
+        {
+            yield return ShowHotUpdateWindowForDebug();
+            yield break; // 不自动进游戏，等玩家点窗口上的「进入游戏」
+        }
+
         if (_hotUpdateWindow == null) // 如果有窗口就按照窗口的进度来，如果没有窗口就直接开始游戏
         {
             yield return GameLanuchCoroutine(); // 直接启动游戏（异步等待，见方法注释）
@@ -83,11 +99,49 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 检测catalog目录更新
-    /// catalog是Addressables的目录文件，记录所有资源的位置、依赖关系和版本信息
+    /// 【调试用】强制显示热更窗口，方便在「没有真实更新」时预览 UI。
+    ///
+    /// 正常流程里热更窗口只在两件事同时成立时才被创建：
+    ///   1. CheckForCatalogUpdates 发现远程 catalog 与本地不同
+    ///   2. GetDownloadSizeAsync 算出要下载的字节数 > 0
+    /// 所以本地开发时基本看不到它。勾上 HotUpdateSystem 上的
+    /// debugForceHotUpdateWindow 就会走这里：直接把窗口拉出来并置成 100%，
+    /// 走满进度后出现「进入游戏」按钮，点它同样能进游戏。
+    /// </summary>
+    private IEnumerator ShowHotUpdateWindowForDebug()
+    {
+        Debug.Log("[HotUpdateSystem] 调试开关开启：强制显示热更窗口（仅用于预览 UI）");
+
+        AsyncOperationHandle<GameObject> windowHandle = Addressables.InstantiateAsync(HotUpdateWindowKey);
+        yield return windowHandle;
+
+        if (windowHandle.Status != AsyncOperationStatus.Succeeded || windowHandle.Result == null)
+        {
+            Debug.LogError(
+                $"[HotUpdateSystem] 热更窗口加载失败（地址 '{HotUpdateWindowKey}'）: " +
+                $"{windowHandle.OperationException?.Message}");
+            yield break;
+        }
+
+        _hotUpdateWindow = windowHandle.Result.GetComponent<IHotUpdateWindow>();
+        if (_hotUpdateWindow == null)
+        {
+            Debug.LogError($"[HotUpdateSystem] 地址 '{HotUpdateWindowKey}' 的预制体上没有 IHotUpdateWindow 组件");
+            yield break;
+        }
+
+        // 故意不去读远程 VersionInfo：那两个方法内部用的是 WaitForCompletion，
+        // 远程不通时会阻塞主线程。预览用直接写死一行说明即可。
+        _hotUpdateWindow.GetVersion("调试模式", "强制显示热更窗口（未读取真实版本信息）");
+        // 200MB 是假数据，只是让进度文本看起来自然些
+        _hotUpdateWindow.Show(200L * 1024 * 1024, () => StartCoroutine(GameLanuchCoroutine()));
+        _hotUpdateWindow.UpdateDownloadProgress(1f); // 直接满进度 → 窗口 Update 里会亮出「进入游戏」按钮
+    }
+
+    /// <summary>
+    /// 检测catalog目录更新 catalog是Addressables的目录文件，记录所有资源的位置、依赖关系和版本信息
     /// 检查是否有新的资源版本需要下载
     /// </summary>
-    /// <returns></returns>
     private IEnumerator CheckForCatalogUpdates()
     {
         // 检查是否有新的 catalog版本可用
@@ -123,11 +177,9 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 更新catalog目录
-    /// 当检测到有catalog需要更新时，下载最新的catalog文件
+    /// 更新catalog目录 当检测到有catalog需要更新时，下载最新的catalog文件
     /// </summary>
     /// <param name="catalogResult">需要更新的catalog名称列表</param>
-    /// <returns></returns>
     private IEnumerator UpdateCatalogs(List<string> catalogResult)
     {
         // 更新指定的 catalog
@@ -167,11 +219,9 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取需要下载的资源总大小
-    /// 根据收集的资源Key，计算总共需要下载多少数据
+    /// 获取需要下载的资源总大小 根据收集的资源Key，计算总共需要下载多少数据
     /// </summary>
     /// <param name="keys">所有需要下载的资源Key集合</param>
-    /// <returns></returns>
     private IEnumerator GetDownloadSize(IEnumerable<object> keys)
     {
         // 计算指定资源的总下载大小
@@ -190,11 +240,13 @@ public class HotUpdateSystem : MonoBehaviour
                 // 先执行优先热更（下载并加载必要的 DLL和 UI）
                 yield return PriorityHotUpdate();
                 // 显示热更新窗口，并传入总下载大小和完成回调
-                _hotUpdateWindow.Show(downloadSize, () =>
-                {
-                    GameLanuchCoroutine();
-                });
-                _hotUpdateWindow.GetVersion(GetVersion(), GetVersionInfo());
+                _hotUpdateWindow.Show(downloadSize, () => { StartCoroutine(GameLanuchCoroutine()); });
+                // 版本信息
+                yield return LoadVersionInfo();
+                _hotUpdateWindow.GetVersion(
+                    string.IsNullOrEmpty(_cachedVersion) ? "未知" : _cachedVersion,
+                    string.IsNullOrEmpty(_cachedVersionInfo) ? "未知" : _cachedVersionInfo);
+
                 // 开始下载资源 
                 yield return DownloadDependencies(keys, downloadSize);
             }
@@ -214,7 +266,6 @@ public class HotUpdateSystem : MonoBehaviour
     /// </summary>
     /// <param name="keys">资源Key集合</param>
     /// <param name="downloadSize">总下载大小（字节）</param>
-    /// <returns></returns>
     private IEnumerator DownloadDependencies(IEnumerable<object> keys, long downloadSize)
     {
         // 开始下载资源依赖
@@ -246,14 +297,6 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     // 优先热更
-    /// <summary>
-    /// 优先热更流程
-    /// 在显示下载窗口前，先下载必要的核心资源：
-    /// 1. DLL配置文件
-    /// 2. 优先热更的DLL程序集
-    /// 3. 热更新窗口UI
-    /// 这样能确保后续流程能正常执行
-    /// </summary>
     private IEnumerator PriorityHotUpdate()
     {
         // 1. 先下载 dll配置文件
@@ -264,10 +307,25 @@ public class HotUpdateSystem : MonoBehaviour
         // 因为热更新窗口本身也是 Addressable资源，需要先下载才能显示
         // 6.1 先下载热更新窗口所需的资源依赖
         yield return Addressables.DownloadDependenciesAsync(HotUpdateWindowKey, true);
+
         // 6.2 实例化热更新窗口 GameObject
-        _hotUpdateWindow = Addressables.InstantiateAsync(HotUpdateWindowKey)
-            .WaitForCompletion() // 等待实例化完成
-            .GetComponent<IHotUpdateWindow>(); // 获取接口组件
+        AsyncOperationHandle<GameObject> windowHandle = Addressables.InstantiateAsync(HotUpdateWindowKey);
+        yield return windowHandle;
+
+        if (windowHandle.Status != AsyncOperationStatus.Succeeded || windowHandle.Result == null)
+        {
+            Debug.LogError(
+                $"[HotUpdateSystem] 热更窗口实例化失败（地址 '{HotUpdateWindowKey}'）: " +
+                $"{windowHandle.OperationException?.Message}");
+            yield break;
+        }
+
+        _hotUpdateWindow = windowHandle.Result.GetComponent<IHotUpdateWindow>();
+        if (_hotUpdateWindow == null)
+        {
+            Debug.LogError(
+                $"[HotUpdateSystem] 地址 '{HotUpdateWindowKey}' 的预制体上没有实现 IHotUpdateWindow 的组件");
+        }
     }
 
     /// <summary>
@@ -327,27 +385,11 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 启动游戏（协程版）
-    ///
-    /// ⚠️ 这里原本是 Addressables.InstantiateAsync(GameLanuchKey).WaitForCompletion()：
-    ///    WaitForCompletion 会**同步阻塞主线程**直到 bundle 加载完成。
-    ///    而 GameLanuch 位于「远程组」（bundle 在 ServerData/ 里），一旦远程服务器
-    ///    连不上（地址填错 / 服务没启动 / 网络不通），主线程就会一直卡在等待上 ——
-    ///    表现就是「Unity 编辑器整个卡死，点哪里都没反应」。
-    ///
-    ///    改成 yield return 之后是异步等待：加载慢不会冻结界面，失败也能继续走到后续逻辑。
+    /// 启动游戏
     /// </summary>
     private IEnumerator GameLanuchCoroutine()
     {
         BootWatchdog.Enter("GameLanuchCoroutine 实例化常驻单例");
-
-        // ⚠️ 预热 UIManager：它会 new GameObject + Instantiate Canvas/EventSystem，
-        //    并调用 DontDestroyOnLoad。这些操作如果在「场景加载过程中」才第一次发生，
-        //    就是在 Addressables 场景加载的回调/整合阶段里创建并迁移常驻对象，
-        //    属于 Unity 的灰色地带（过去踩过编辑器假死）。
-        //    放在这里（进场景之前、普通协程里）做，时机最干净。
-        _ = UIManager.Instance;
-
         Addressables.InstantiateAsync("SoundAudioPool");
         Addressables.InstantiateAsync("GameManager");
         // 清理热更新窗口资源
@@ -366,28 +408,42 @@ public class HotUpdateSystem : MonoBehaviour
     }
 
     /// <summary>
-    /// 获取版本信息
+    /// 异步读取版本信息 / 版本号。
     /// </summary>
-    private string GetVersionInfo()
+    private IEnumerator LoadVersionInfo()
     {
-        // 下载版本信息，true 使用完资源之后自动释放
-        Addressables.DownloadDependenciesAsync("VersionInfo", true).WaitForCompletion();
-        TextAsset textAsset = Addressables.LoadAssetAsync<TextAsset>("VersionInfo").WaitForCompletion();
-        string info = textAsset.text;
-        Addressables.Release(textAsset);
-        return info;
-    }
+        _cachedVersionInfo = null;
+        _cachedVersion = null;
 
-    /// <summary>
-    /// 获取版本号信息
-    /// </summary>
-    private string GetVersion()
-    {
-        // 下载版本信息，true 使用完资源之后自动释放
-        Addressables.DownloadDependenciesAsync("Version", true).WaitForCompletion();
-        TextAsset textAsset = Addressables.LoadAssetAsync<TextAsset>("Version").WaitForCompletion();
-        string info = textAsset.text;
-        Addressables.Release(textAsset);
-        return info;
+        BootWatchdog.Enter("HotUpdateSystem 读取 VersionInfo");
+        AsyncOperationHandle<TextAsset> infoHandle = Addressables.LoadAssetAsync<TextAsset>("VersionInfo");
+        yield return infoHandle;
+        if (infoHandle.Status == AsyncOperationStatus.Succeeded && infoHandle.Result != null)
+        {
+            _cachedVersionInfo = infoHandle.Result.text;
+        }
+        else
+        {
+            Debug.LogWarning($"[HotUpdateSystem] 读取 VersionInfo 失败: {infoHandle.OperationException?.Message}");
+        }
+
+        Addressables.Release(infoHandle);
+
+        BootWatchdog.Enter("HotUpdateSystem 读取 Version");
+        AsyncOperationHandle<TextAsset> versionHandle = Addressables.LoadAssetAsync<TextAsset>("Version");
+        yield return versionHandle;
+        if (versionHandle.Status == AsyncOperationStatus.Succeeded && versionHandle.Result != null)
+        {
+            _cachedVersion = versionHandle.Result.text;
+        }
+        else
+        {
+            Debug.LogWarning($"[HotUpdateSystem] 读取 Version 失败: {versionHandle.OperationException?.Message}");
+        }
+
+        Addressables.Release(versionHandle);
+
+        BootWatchdog.Leave();
+        BootWatchdog.Leave();
     }
 }
