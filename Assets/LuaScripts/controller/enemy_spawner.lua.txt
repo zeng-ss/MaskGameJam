@@ -77,13 +77,15 @@ function EnemySpawner:start()
 
     -- 预加载失败（例如某个敌人预制体缺组件）不该连带把后面的倒计时面板一起吞掉，
     -- 所以这里单独兜住异常，只记一条错误。
+    --
+    -- 注意：预加载现在是**分帧**进行的（见 update_preload），
+    -- 全部完成后才由它调用 open_timer_panel()，与原来的时序保持一致。
     local ok, err = pcall(function() self:preload_all_pools() end)
     if not ok then
         UnityEngine.Debug.LogError("[enemy_spawner] 对象池预加载失败：" .. tostring(err))
+        self.preloading = false
+        self:open_timer_panel() -- 预加载起不来也要开倒计时，别让流程停住
     end
-
-    -- 打开倒计时面板（TimerPanel 逻辑已迁 Lua，跨语言调 start_countdown）
-    self:open_timer_panel()
 end
 
 function EnemySpawner:resolve_player()
@@ -92,6 +94,11 @@ function EnemySpawner:resolve_player()
 end
 
 function EnemySpawner:update()
+    -- 分帧预加载对象池（放最前面：即使玩家还没就绪也要推进预加载）
+    if self.preloading then
+        self:update_preload()
+    end
+
     -- 玩家引用每帧校验（切场景后旧对象会被销毁，但 Lua 里的 userdata 仍是「非 nil」）
     local player = self.player
     if player == nil or not LuaBinding.IsAlive(player) then
@@ -363,26 +370,59 @@ function EnemySpawner:random_start_rain()
     end
 end
 
--- ---------------- 预加载对象池 ----------------
+-- ---------------- 预加载对象池（分帧） ----------------
+--
+-- ⚠️ 为什么必须分帧：
+--    这里总共要实例化 575 个对象（Cow 30 + RedWarn 30 + Explo 15 + StarFish 30 + BlueSlime 30
+--    + MultiBullet 100 + MultiRobot 30 + HitPlayerBlood 20 + SingleBullet 100 + TurtleShell 30
+--    + SingleRobot 30 + PlayerBullet 100 + ParabolicBullet 30）。
+--    当 Play Mode Script =「Use Asset Database」时，Addressables 的加载是**同步完成**的，
+--    于是 575 次 Instantiate + 575 次 Lua 组件绑定会全部挤在**同一帧**里执行，
+--    主线程被堵死几十秒 —— 表现就是「一点开始游戏，编辑器整个假死、点哪都没反应」。
+--    改成每帧处理一小批之后界面全程可响应（575 个约 29 帧 ≈ 半秒加载完）。
+
+local PRELOAD_PER_FRAME = 20 -- 每帧实例化多少个（想更快可以调大，但别一次全放）
 
 function EnemySpawner:preload_all_pools()
     PoolMgr.Instance:Clear()
+
+    -- 展平成一条队列，交给 update 分帧消费
+    self.preloadQueue = {}
     for i = 1, #PRELOAD_LIST do
         local item = PRELOAD_LIST[i]
-        self:preload_enemy(item[1], item[2], item[3])
+        for _ = 1, item[3] do
+            table.insert(self.preloadQueue, { item[1], item[2] })
+        end
     end
+
+    self.preloadIndex = 1
+    self.preloading = true
 end
 
-function EnemySpawner:preload_enemy(resPath, poolName, count)
-    for _ = 1, count do
+-- 每帧只实例化一小批，避免单帧卡死
+function EnemySpawner:update_preload()
+    local queue = self.preloadQueue
+    local last = math.min(self.preloadIndex + PRELOAD_PER_FRAME - 1, #queue)
+
+    for i = self.preloadIndex, last do
+        local resPath, poolName = queue[i][1], queue[i][2]
         ResMgr.Instance:LoadAndInstantiateAsync(resPath, nil, function(obj)
-            if obj ~= nil then
+            if LuaBinding.IsAlive(obj) then
                 obj.name = poolName
                 PoolMgr.Instance:PushObj(poolName, obj)
             else
                 UnityEngine.Debug.LogWarning("预加载失败：" .. resPath .. " 不存在！")
             end
         end)
+    end
+
+    self.preloadIndex = last + 1
+
+    if self.preloadIndex > #queue then
+        -- 全部预加载完成，这时才开倒计时面板（与原来的时序一致）
+        self.preloading = false
+        self.preloadQueue = nil
+        self:open_timer_panel()
     end
 end
 

@@ -982,6 +982,17 @@ grep -rn "系统提示里的方法名" Assets/LuaScripts/
 | `Value cannot be null. Parameter name: key` | 给字典传了 nil 的 key（通常是上一行有变量没赋值） |
 | `module 'xxx' not found` | Addressables 里没有这个 Lua（跑 `PrepareLuaAssets`） |
 
+### 12.4 改完 Lua 先自检语法（省一次编译等待）
+
+```bash
+# 在项目根目录执行
+NODE_PATH="C:/Users/ASUS/.workbuddy/binaries/node/workspace/node_modules" \
+"C:/Users/ASUS/.workbuddy/binaries/node/versions/22.22.2-6/node.exe" Tools/lua_check.js
+```
+
+它会用 `luaparse` 把 `Assets/LuaScripts/**/*.lua.txt` 全部解析一遍，有语法错会直接指出文件和错误信息。
+**在切回 Unity 之前跑一遍**，能省掉「等 Unity 编译 → 发现拼错了 → 再改」的来回。
+
 ---
 
 ## 13. 可用 API 速查

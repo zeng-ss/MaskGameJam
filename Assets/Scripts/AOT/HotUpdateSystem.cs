@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -27,6 +27,13 @@ public class HotUpdateSystem : MonoBehaviour
 
     private void Start()
     {
+        // 启动「主线程停顿看门狗」。
+        // 编辑器卡死有两类：死循环（CPU 满）和死锁/同步阻塞（CPU 空闲、日志停住、无报错）。
+        // 后者最难查 —— 因为主线程卡住后连 Debug.Log 都写不出来。
+        // 看门狗跑在后台线程上，主线程卡住时它照样能把「最后阶段」写进
+        // Logs/boot_watchdog.log，这样看一眼日志就知道卡在哪一行。
+        BootWatchdog.Start();
+
         // 构建 Addressables 缓存目录路径
         // 格式：C:\Users\用户名\AppData\LocalLow\公司名\应用名\com.unity.addressables
         StartCoroutine(HotUpdate()); // 开始热更新流程
@@ -70,7 +77,7 @@ public class HotUpdateSystem : MonoBehaviour
 
         if (_hotUpdateWindow == null) // 如果有窗口就按照窗口的进度来，如果没有窗口就直接开始游戏
         {
-            GameLanuch(); // 直接启动游戏
+            yield return GameLanuchCoroutine(); // 直接启动游戏（异步等待，见方法注释）
             // 这样开始游戏也可以通过什么东西（组件）来实现开始逻辑    Addressables.InstantiateAsync("xxx").WaitForCompletion();
         }
     }
@@ -183,7 +190,10 @@ public class HotUpdateSystem : MonoBehaviour
                 // 先执行优先热更（下载并加载必要的 DLL和 UI）
                 yield return PriorityHotUpdate();
                 // 显示热更新窗口，并传入总下载大小和完成回调
-                _hotUpdateWindow.Show(downloadSize, GameLanuch);
+                _hotUpdateWindow.Show(downloadSize, () =>
+                {
+                    GameLanuchCoroutine();
+                });
                 _hotUpdateWindow.GetVersion(GetVersion(), GetVersionInfo());
                 // 开始下载资源 
                 yield return DownloadDependencies(keys, downloadSize);
@@ -298,16 +308,46 @@ public class HotUpdateSystem : MonoBehaviour
         }
 
         // 2. 创建管理器并初始化 LuaEnv
+        BootWatchdog.Enter("HotUpdateSystem 创建 XLuaManager");
         GameObject luaGo = new GameObject("XLuaManager", typeof(XLuaManager));
         XLuaManager luaManager = luaGo.GetComponent<XLuaManager>();
         luaManager.InitLuaEnv();
+        BootWatchdog.Leave();
+
+        // 2.5 预加载全部 Lua 脚本。
+        //     必须在「进游戏场景之前」、且在 Addressables 回调之外（这里是协程）完成。
+        //     预加载之后运行时 require 只查字典，不再有 Addressables 同步等待，
+        //     也就不会踩到 "Reentering the Update method is not allowed"（在回调里 WaitForCompletion）。
+        yield return luaManager.PreloadLuaAssets(LuaGroupKey);
 
         // 3. 执行 Lua 入口
+        BootWatchdog.Enter("HotUpdateSystem 执行 Lua 入口 main");
         luaManager.StartLua();
+        BootWatchdog.Leave();
     }
 
-    private void GameLanuch()
+    /// <summary>
+    /// 启动游戏（协程版）
+    ///
+    /// ⚠️ 这里原本是 Addressables.InstantiateAsync(GameLanuchKey).WaitForCompletion()：
+    ///    WaitForCompletion 会**同步阻塞主线程**直到 bundle 加载完成。
+    ///    而 GameLanuch 位于「远程组」（bundle 在 ServerData/ 里），一旦远程服务器
+    ///    连不上（地址填错 / 服务没启动 / 网络不通），主线程就会一直卡在等待上 ——
+    ///    表现就是「Unity 编辑器整个卡死，点哪里都没反应」。
+    ///
+    ///    改成 yield return 之后是异步等待：加载慢不会冻结界面，失败也能继续走到后续逻辑。
+    /// </summary>
+    private IEnumerator GameLanuchCoroutine()
     {
+        BootWatchdog.Enter("GameLanuchCoroutine 实例化常驻单例");
+
+        // ⚠️ 预热 UIManager：它会 new GameObject + Instantiate Canvas/EventSystem，
+        //    并调用 DontDestroyOnLoad。这些操作如果在「场景加载过程中」才第一次发生，
+        //    就是在 Addressables 场景加载的回调/整合阶段里创建并迁移常驻对象，
+        //    属于 Unity 的灰色地带（过去踩过编辑器假死）。
+        //    放在这里（进场景之前、普通协程里）做，时机最干净。
+        _ = UIManager.Instance;
+
         Addressables.InstantiateAsync("SoundAudioPool");
         Addressables.InstantiateAsync("GameManager");
         // 清理热更新窗口资源
@@ -319,7 +359,10 @@ public class HotUpdateSystem : MonoBehaviour
 
         // 加载游戏主场景
         // 通过 Addressables实例化 GameLanuch对象，它会负责加载游戏场景
-        Addressables.InstantiateAsync(GameLanuchKey).WaitForCompletion();
+        BootWatchdog.Enter("GameLanuchCoroutine 实例化 GameLanuch");
+        yield return Addressables.InstantiateAsync(GameLanuchKey);
+        BootWatchdog.Leave();
+        BootWatchdog.Leave();
     }
 
     /// <summary>

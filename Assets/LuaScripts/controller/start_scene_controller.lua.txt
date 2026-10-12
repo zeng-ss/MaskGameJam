@@ -10,7 +10,16 @@ local UIManager = CS.UIManager
 
 local StartSceneController = {}
 
-function StartSceneController:awake()
+-- ⚠️ 为什么放在 start 而不是 awake：
+--    StartScene 是通过 Addressables 加载的，本组件就挂在 StartScene 里，
+--    所以它的 awake 会在「Addressables 场景加载的整合/回调阶段」里被调用。
+--    而 openPanelByName 会引发一串嵌套操作：Addressables 加载面板预制体 →
+--    Instantiate → 面板上的 LuaPanel 绑定 Lua 模块 → require 脚本。
+--    在 Addressables 自己的回调链里再发起新的 Addressables 操作属于高风险写法
+--    （其中任何一处 WaitForCompletion 都会直接抛
+--      "Reentering the Update method is not allowed"）。
+--    start 在场景真正激活后的第一帧才跑，已经跳出回调链，最安全。
+function StartSceneController:start()
     UIManager.Instance:openPanelByName("StartPanel")
 end
 

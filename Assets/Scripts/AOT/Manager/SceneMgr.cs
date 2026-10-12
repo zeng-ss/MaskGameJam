@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -47,6 +47,7 @@ public class SceneMgr:UnitySingleTonMono<SceneMgr>
         // 等待一帧，确保加载面板已经显示
         yield return null;
         // 使用 Addressables 加载场景
+        BootWatchdog.Enter($"SceneMgr.LoadSceneAsync({sceneName}) 加载中");
         var loadHandle = Addressables.LoadSceneAsync(sceneName, LoadSceneMode.Single);
         float progress = 0;
         // 使用真实的加载进度
@@ -60,6 +61,7 @@ public class SceneMgr:UnitySingleTonMono<SceneMgr>
         if (loadHandle.Status != AsyncOperationStatus.Succeeded)
         {
             Debug.LogError($"Addressables 加载场景失败: {sceneName}，错误：{loadHandle.OperationException}");
+            BootWatchdog.Leave();
             yield break;
         } 
         // 确保进度条显示100%
@@ -67,7 +69,10 @@ public class SceneMgr:UnitySingleTonMono<SceneMgr>
         // 等待一小段时间让玩家看到100%的进度
         // yield return new WaitForSeconds(1f);
         // 执行回调
+        BootWatchdog.Enter($"SceneMgr.LoadSceneAsync({sceneName}) 场景完成，执行回调");
         fun?.Invoke();
+        BootWatchdog.Leave();
+        BootWatchdog.Leave();
     }
     
     

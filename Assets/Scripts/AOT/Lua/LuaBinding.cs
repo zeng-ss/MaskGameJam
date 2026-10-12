@@ -31,6 +31,11 @@ public class LuaBinding : IDisposable
     // 当前所有活着的绑定，退出时统一释放（否则 LuaEnv.Dispose 会因为「还有 C# 回调」抛异常）
     private static readonly List<LuaBinding> s_activeBindings = new();
 
+    // Lua 模块名 -> 工厂函数（模块文件最后 `return function(cs) ... end` 的那个 function）
+    // 缓存起来复用，避免每绑定一个组件就 DoString 编译一遍 Lua 源码。
+    // 对象池开场会一次实例化几百个同类型组件，不缓存的话主线程会被编译开销堵死。
+    private static readonly Dictionary<string, LuaFunction> s_factoryCache = new();
+
     /// <summary>
     /// 通过 C# 组件反查它绑定的 Lua 实例表
     /// </summary>
@@ -70,6 +75,12 @@ public class LuaBinding : IDisposable
             }
             s_activeBindings.Clear();
         }
+
+        foreach (LuaFunction factory in s_factoryCache.Values)
+        {
+            if (factory != null) factory.Dispose();
+        }
+        s_factoryCache.Clear();
 
         s_instanceMap.Clear();
     }
@@ -210,18 +221,21 @@ public class LuaBinding : IDisposable
 
         LuaEnv luaEnv = manager.LuaEnv;
 
-        // 独立环境，避免污染全局表
-        _scriptEnv = luaEnv.NewTable();
-        LuaTable meta = luaEnv.NewTable();
-        meta.Set("__index", luaEnv.Global);
-        _scriptEnv.SetMetaTable(meta);
-        meta.Dispose();
-        _scriptEnv.Set("cs", owner);
+        // ⚠️ 性能关键：不要再「每次绑定都 DoString 编译一遍 Lua 源码」。
+        //    对象池开场会一次性实例化几百个同类型组件（EnemySpawner 预加载 575 个），
+        //    每次 Bind 都编译一遍 Lua 源码会把主线程堵死，表现就是
+        //    「点了开始游戏之后编辑器假死，点哪都没反应」。
+        //    改成：require + 取工厂函数只做一次并缓存，之后每次绑定只是一次普通函数调用。
+        LuaFunction factory = GetOrCreateFactory(luaEnv, luaModule);
+        if (factory == null)
+        {
+            Debug.LogError($"[LuaBinding] 模块 {luaModule} 未返回可用的工厂函数");
+            return;
+        }
 
-        // local factory = require 'xxx'; return factory(cs)
-        object[] ret = luaEnv.DoString(
-            $"local factory = require '{luaModule}'; return factory(cs)",
-            $"LuaBinding:{luaModule}", _scriptEnv);
+        BootWatchdog.Enter($"LuaBinding.Bind({luaModule}) 执行模块工厂");
+        object[] ret = factory.Call(owner);
+        BootWatchdog.Leave();
 
         if (ret == null || ret.Length == 0 || !(ret[0] is LuaTable))
         {
@@ -244,6 +258,33 @@ public class LuaBinding : IDisposable
         // 面板专用：BasePanel.Show/Hide 会转发到这里
         _luaShow = LuaInstance.Get<Action>("show");
         _luaHide = LuaInstance.Get<Action>("hide");
+    }
+
+    /// <summary>
+    /// 取模块的工厂函数（缓存）。
+    /// 缓存的是 Lua 模块最后 `return function(cs) return behaviour.new(cs, X) end` 的那个函数，
+    /// 之后每个实例只需要 factory.Call(owner) 一次 —— 不用再编译 Lua 源码。
+    /// </summary>
+    private static LuaFunction GetOrCreateFactory(LuaEnv luaEnv, string luaModule)
+    {
+        if (s_factoryCache.TryGetValue(luaModule, out LuaFunction cached) && cached != null)
+        {
+            return cached;
+        }
+
+        BootWatchdog.Enter($"LuaBinding.GetOrCreateFactory({luaModule})");
+
+        object[] ret = luaEnv.DoString($"return require '{luaModule}'",
+            $"LuaBinding:Factory:{luaModule}");
+        BootWatchdog.Leave();
+
+        if (ret == null || ret.Length == 0 || !(ret[0] is LuaFunction fn))
+        {
+            return null;
+        }
+
+        s_factoryCache[luaModule] = fn;
+        return fn;
     }
 
     public void Awake() => _luaAwake?.Invoke();

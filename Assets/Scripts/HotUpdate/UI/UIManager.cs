@@ -113,6 +113,7 @@ public class UIManager : UnitySingleTonMono<UIManager>
 
         AsyncOperationHandle<GameObject> loadHandle = Addressables.LoadAssetAsync<GameObject>(panelName);
         panelLoadHandles.Add(panelName, loadHandle);
+        BootWatchdog.Mark($"UIManager 加载面板资源 {panelName}");
         StartCoroutine(FinishLoadPanelCoroutine(loadHandle, panelName, needPostProcessing, onLoadComplete));
     }
 
@@ -152,6 +153,9 @@ public class UIManager : UnitySingleTonMono<UIManager>
         }
 
         // 3. 实例化面板（保留预制体Transform）
+        //    注意：面板预制体上的 LuaPanel.Awake 会在这里同步跑 Lua 绑定，
+        //    所以这一句如果卡住，看门狗会记成下面这个 Mark。
+        BootWatchdog.Mark($"UIManager 实例化面板 {panelName}");
         GameObject panelObj = Instantiate(prefabObj, currentPanel.transform, false);
         panelObj.name = panelName;
 

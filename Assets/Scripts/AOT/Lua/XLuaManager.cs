@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using XLua;
 
 // TODO：Lua 热更管线说明
@@ -25,8 +27,12 @@ public class XLuaManager : MonoBehaviour
 
     private LuaEnv _luaEnv;
 
-    // 已加载的脚本缓存，持有引用避免被 Addressables 回收
+    // 已加载的脚本缓存：地址（= require 的名字） -> TextAsset
+    // 同时用资源名再存一份别名，两条路都能命中，持有引用避免被 Addressables 回收
     private readonly Dictionary<string, TextAsset> _luaCache = new();
+
+    // 真正向 Addressables 借来的资源（去重），释放时按这个列表来，避免同一份资源被释放两次
+    private readonly List<TextAsset> _luaOwned = new();
 
     public LuaEnv LuaEnv => _luaEnv;
     public bool IsInited => _luaEnv != null;
@@ -81,22 +87,100 @@ public class XLuaManager : MonoBehaviour
         return asset.bytes;
     }
 
+    /// <summary>
+    /// 预加载 Lua 分组里的全部 TextAsset，填满 _luaCache。
+    ///
+    /// ⚠️ 为什么必须预加载：
+    ///    原来 LoadLuaAsset 走的是 Addressables.LoadAssetAsync(...).WaitForCompletion()，
+    ///    而 WaitForCompletion 内部会调用 ResourceManager.Update()。
+    ///    Addressables 对「在回调里再进 Update」是直接抛异常的：
+    ///      Reentering the Update method is not allowed.
+    ///      This can happen when calling WaitForCompletion on an operation while inside of a callback.
+    ///    也就是说，只要某个 require 恰好发生在 Addressables 的回调链里
+    ///    （场景加载完成、Instantiate 完成、面板加载完成的瞬间 —— 这些都是常态），
+    ///    这条路径就有炸的风险。
+    ///    预加载之后，运行时 require 只查字典，一次 Addressables 调用都不会发生。
+    ///
+    /// 时序要求：必须在「进入游戏场景之前」、且在 Addressables 回调之外（协程里）完成。
+    /// </summary>
+    public IEnumerator PreloadLuaAssets(string label)
+    {
+        _luaCache.Clear();
+        _luaOwned.Clear();
+
+        BootWatchdog.Enter($"XLuaManager.PreloadLuaAssets({label})");
+
+        var locHandle = Addressables.LoadResourceLocationsAsync(label);
+        yield return locHandle;
+
+        if (locHandle.Status != AsyncOperationStatus.Succeeded || locHandle.Result == null)
+        {
+            Debug.LogWarning(
+                $"[XLuaManager] 预加载 Lua 失败：找不到 label '{label}' 的资源定位" +
+                "（是否漏跑 Build/PrepareLuaAssets，或没重新构建 Addressables？）");
+            BootWatchdog.Leave();
+            yield break;
+        }
+
+        int count = 0;
+        foreach (var loc in locHandle.Result)
+        {
+            var assetHandle = Addressables.LoadAssetAsync<TextAsset>(loc);
+            yield return assetHandle;
+
+            if (assetHandle.Status == AsyncOperationStatus.Succeeded && assetHandle.Result != null)
+            {
+                TextAsset asset = assetHandle.Result;
+                // 地址就是文件名（require 的名字），这是主键
+                _luaCache[loc.PrimaryKey] = asset;
+                // 再按 Unity 资源名兜一层（TextAsset 的 name 是 "xxx.lua"）
+                if (!_luaCache.ContainsKey(asset.name)) _luaCache[asset.name] = asset;
+                _luaOwned.Add(asset);
+                count++;
+            }
+            else
+            {
+                Debug.LogWarning($"[XLuaManager] Lua 脚本加载失败: {loc.PrimaryKey}");
+                Addressables.Release(assetHandle);
+            }
+        }
+
+        Addressables.Release(locHandle);
+        BootWatchdog.Leave();
+
+        Debug.Log($"[XLuaManager] Lua 脚本预加载完成：{count} 个（label: {label}）");
+    }
+
+    /// <summary>
+    /// 取一个已预加载的 Lua 脚本。正常路径**只查字典**，不碰 Addressables。
+    /// </summary>
     private TextAsset LoadLuaAsset(string address)
     {
         if (_luaCache.TryGetValue(address, out TextAsset cached) && cached != null)
             return cached;
+
+        // 兜底：预加载漏掉了（例如运行期新增脚本）。这里仍然会同步等待，
+        // 正常流程不该走到这里 —— 走到就说明预加载没覆盖到，会打警告提示。
+        BootWatchdog.Enter($"XLuaManager.LoadLuaAsset 同步兜底({address})");
+
+        Debug.LogWarning(
+            $"[XLuaManager] Lua 脚本 '{address}' 不在预加载缓存里，正在同步兜底加载。" +
+            "请确认 PreloadLuaAssets 覆盖了全部脚本。");
 
         var handle = Addressables.LoadAssetAsync<TextAsset>(address);
         TextAsset asset = handle.WaitForCompletion();
         if (asset != null)
         {
             _luaCache[address] = asset;
+            if (!_luaCache.ContainsKey(asset.name)) _luaCache[asset.name] = asset;
+            if (!_luaOwned.Contains(asset)) _luaOwned.Add(asset);
         }
         else
         {
             Addressables.Release(handle);
         }
 
+        BootWatchdog.Leave();
         return asset;
     }
 
@@ -136,6 +220,10 @@ public class XLuaManager : MonoBehaviour
 
     private void Update()
     {
+        // 给「主线程停顿看门狗」喂心跳：卡住时后台线程才能把现场写进
+        // Logs/boot_watchdog.log（见 BootWatchdog）
+        BootWatchdog.Beat();
+
         // 驱动 Lua 侧的 GC，必须定期调用
         _luaEnv?.Tick();
     }
@@ -159,11 +247,14 @@ public class XLuaManager : MonoBehaviour
         //    InvalidOperationException: try to dispose a LuaEnv with C# callback!
         LuaBinding.DisposeAll();
 
-        foreach (var kv in _luaCache)
+        // 按「去重后的资源列表」释放，避免同一份 TextAsset 被释放两次
+        // （缓存里同时存了地址和资源名两个键，都指向同一个对象）
+        foreach (TextAsset asset in _luaOwned)
         {
-            if (kv.Value != null) Addressables.Release(kv.Value);
+            if (asset != null) Addressables.Release(asset);
         }
 
+        _luaOwned.Clear();
         _luaCache.Clear();
 
         // 2. 再释放 LuaEnv。

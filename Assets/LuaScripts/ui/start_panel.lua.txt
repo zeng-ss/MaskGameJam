@@ -7,6 +7,7 @@ local UnityEngine = CS.UnityEngine
 local Application = UnityEngine.Application
 local Mathf = UnityEngine.Mathf
 local Time = UnityEngine.Time
+local isLoading = false
 
 local StartPanel = {}
 
@@ -62,7 +63,10 @@ end
 function StartPanel:onEndlessClick()
     self:playClickSound()
 
+    if isLoading then return end
+    isLoading = true 
     CS.SceneMgr.Instance:LoadSceneAsync("EndlessScene", function()
+        isLoading = false
         CS.UIManager.Instance:closePanelByName("StartPanel")
         CS.UIManager.Instance:openPanelByName("PlayerProPanel")
     end)
