@@ -817,6 +817,42 @@ LUA: [lua] main.lua loaded
 
 这一行之后的内容才是当前会话的。
 
+### 坑 11（新手最容易踩）：点号调 C# 实例方法 → `invalid arguments to xxx`
+
+```
+LuaException: invalid arguments to openPanelByName
+stack traceback:
+  [C]: in field 'openPanelByName'
+```
+
+**报错长这样（结尾没有 `!`、名字不带命名空间）= xLua 的反射调用参数对不上**，九成是把 `:` 写成了 `.`：
+
+```lua
+-- ❌ 错：Lua 不会自动补 self，"TipPanel" 被当成了 self，函数被当成了 panelName
+UIManager.Instance.openPanelByName("TipPanel", function(panel) ... end)
+
+-- ✅ 对：实例方法一律用冒号
+UIManager.Instance:openPanelByName("TipPanel", function(panel) ... end)
+```
+
+原因：xLua 里 **C# 的实例方法第一个参数就是 `self`（那个 C# 对象本身）**。
+`obj:foo(a)` 等价于 `obj.foo(obj, a)`；写成 `obj.foo(a)` 就等于只传了 `a`，
+于是参数位置整体错位一格，类型自然对不上。
+
+**判断口诀**：
+
+| 调什么 | 用什么 |
+|---|---|
+| C# 实例方法（`UIManager.Instance:openPanelByName(...)`） | `:` |
+| 自己 Lua 表的方法（`self:do_thing()`） | `:` |
+| C# 静态方法（`GameObject.FindGameObjectWithTag(...)`、`Mathf.Lerp(...)`） | `.` |
+| 字段 / 属性（`cs.healthImage`、`pool.hitPlayerClip`） | `.` |
+| 命名空间 / 类访问（`CS.UIManager`、`UnityEngine.Time`） | `.` |
+
+> 另一个区分办法：**报错里带 `!` 且是全限定名**（如 `invalid arguments to UnityEngine.Screen.SetResolution!`）
+> = 生成代码那套（wrap）报的；**不带 `!`** = 反射那套报的。两者的参数匹配规则不同，
+> 但「先检查冒号」总是没错的。
+
 ---
 
 ## 10. 实战一：加一个新的 Lua 组件

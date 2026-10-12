@@ -1,4 +1,5 @@
-﻿using UnityEngine.UI;
+﻿using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// 暂停/退出面板 —— 逻辑全部在 Lua：Assets/LuaScripts/ui/esc_panel.lua.txt
@@ -9,6 +10,8 @@ public class EscPanel : LuaPanel
     public Button backBtn;
     public Button pauseBtn;
     public Button closeBtn;
+    public Transform panelRoot;
+    public GameObject mask;
 
     protected override string DefaultLuaModule => "esc_panel";
 }

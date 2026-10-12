@@ -18,7 +18,7 @@ public static class Build
 {
     // 构建输出路径：项目根目录/Builds/项目名.exe
     private static string buildPath => Path.Combine(new DirectoryInfo(Application.dataPath).Parent.FullName,
-        $"Builds/{Application.productName}.exe");
+        $"Game/{Application.productName}.exe");
 
     /// <summary>
     /// 构建新客户端

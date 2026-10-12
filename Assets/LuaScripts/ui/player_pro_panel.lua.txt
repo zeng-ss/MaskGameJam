@@ -137,7 +137,7 @@ function PlayerProPanel:esc_click()
 
     UIManager.Instance:openPanelByName("EscPanel", function(panel)
         if panel == nil then return end
-        local tr = panel.transform
+        local tr = panel.panelRoot
         tr.localPosition = UnityEngine.Vector3(0, 750, 0)
         Tween.LocalMove(tr, UnityEngine.Vector3.zero, 0.5)
     end)

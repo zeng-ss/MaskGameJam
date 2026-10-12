@@ -160,6 +160,18 @@ xLua 源码 + 生成代码 + 项目代码全部在 `Assembly-CSharp`。已删除
 要靠主循环推进，**存在「等一个永远不会完成的操作」的死锁风险**。
 `Assets/Scripts/AOT/HotUpdateSystem.cs` 里现已无任何真实 `WaitForCompletion`（只剩注释）。
 
+### 5.7 点号调 C# 实例方法 → `invalid arguments to xxx`
+```
+LuaException: invalid arguments to openPanelByName
+  [C]: in field 'openPanelByName'
+```
+**`obj.method(a)` 是错的，实例方法必须写成 `obj:method(a)`。**
+xLua 里 C# 实例方法**第一个参数就是 `self`（C# 对象本身）**，`obj:foo(a)` ≡ `obj.foo(obj, a)`。
+写成点号时 Lua 不补 self，所有实参整体往前错一位 → 类型对不上 → 反射调用报 `invalid arguments`。
+口诀：**C# 实例方法 / Lua 表方法 → `:`；静态方法 / 字段 / 属性 / 命名空间 → `.`**。
+辨别报错来源：带 `!` 且是全限定名（`invalid arguments to UnityEngine.Screen.SetResolution!`）= 生成代码（wrap）报的；
+**不带 `!`**（`invalid arguments to openPanelByName`）= 反射报的（即该类型没进 LuaCallCSharp）。
+
 ## 6. 启动期「编辑器卡死」的排查方法（2026-10-12 建立）
 - **先分类**：死循环 = CPU 跑满一个核；**死锁/同步阻塞 = CPU 空闲、窗口无响应、日志停住且无任何报错**。
   用 `Get-Process Unity | Select CPU` 采样 3 秒即可区分（增量≈3s → 死循环；≈0 → 阻塞）。

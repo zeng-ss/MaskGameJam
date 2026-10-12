@@ -11,8 +11,14 @@ local UnityEngine = CS.UnityEngine
 
 local EscPanel = {}
 
+local isPause_click = false
+
 -- 关闭时需要滑出到屏幕外的目标位置（原 C# 里写死的 (0, 751, 0)）
 local HIDE_POSITION = UnityEngine.Vector3(0, 751, 0)
+
+function EscPanel:onenable()
+    self.cs.mask:SetActive(true)
+end
 
 function EscPanel:start()
     local cs = self.cs
@@ -26,9 +32,11 @@ end
 
 -- 关闭按钮：音效 -> 滑出屏幕 -> 关面板
 function EscPanel:close_click()
+    if isPause_click then return end
     local cs = self.cs
     local pool = CS.SoundAudioPool.Instance
     pool:PlaySound(pool.panelHideClip, cs.transform.position)
+    cs.mask:SetActive(false)
 
     Tween.LocalMove(cs.transform, HIDE_POSITION, 0.5, function()
         UIManager.Instance:closePanelByName("EscPanel")
@@ -43,9 +51,11 @@ function EscPanel:pause_click()
 
     local pauseText = cs.pauseBtn:GetComponentInChildren(typeof(CS.TMPro.TMP_Text))
     if pauseText.text == "暂停" then
+        isPause_click = true
         UnityEngine.Time.timeScale = 0
         pauseText.text = "继续"
     else
+        isPause_click = false
         UnityEngine.Time.timeScale = 1
         pauseText.text = "暂停"
     end
@@ -53,6 +63,7 @@ end
 
 -- 返回主菜单：回满血 -> 切场景 -> 清理状态
 function EscPanel:back_click()
+    if isPause_click then return end
     local cs = self.cs
     local pool = CS.SoundAudioPool.Instance
     pool:PlaySound(pool.btnSeletClip, cs.transform.position)
