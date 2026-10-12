@@ -1,0 +1,6 @@
+{
+  "recommendations": [
+    // Lua 语言服务：语法高亮、补全、跳转、语法检查
+    "sumneko.lua"
+  ]
+}

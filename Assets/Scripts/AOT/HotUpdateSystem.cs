@@ -16,7 +16,6 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class HotUpdateSystem : MonoBehaviour
 {
-    private DllConfig _dllConfig; // 存储 DLL配置信息的对象
     private IHotUpdateWindow _hotUpdateWindow; // 热更新窗口接口引用，用于显示下载进度
     private const string DLLConfigKey = "DllConfig"; // DLL配置文件的 Addressables Key
     private const string GameLanuchKey = "GameLanuch"; // 游戏启动器的 Addressables Key
@@ -251,14 +250,6 @@ public class HotUpdateSystem : MonoBehaviour
         // true表示强制重新下载
         yield return Addressables.DownloadDependenciesAsync(DLLConfigKey, true);
 
-        // 2. 加载 DLL配置
-        // WaitForCompletion()是同步等待方法（注意：在协程中使用要小心死锁）
-        _dllConfig = Addressables.LoadAssetAsync<DllConfig>(DLLConfigKey).WaitForCompletion();
-
-        // 3. 下载优先热更程序集（异步，不等待）
-        // 先开始下载，后面再加载
-        Addressables.DownloadDependenciesAsync(_dllConfig.priorityHotUpdate, Addressables.MergeMode.Union, true);
-
         // 6. 下载并加载热更新窗口
         // 因为热更新窗口本身也是 Addressable资源，需要先下载才能显示
         // 6.1 先下载热更新窗口所需的资源依赖
@@ -307,18 +298,14 @@ public class HotUpdateSystem : MonoBehaviour
         }
 
         // 2. 创建管理器并初始化 LuaEnv
-        GameObject luaGo = new GameObject("XLuaManager");
-        XLuaManager luaManager = luaGo.AddComponent<XLuaManager>();
+        GameObject luaGo = new GameObject("XLuaManager", typeof(XLuaManager));
+        XLuaManager luaManager = luaGo.GetComponent<XLuaManager>();
         luaManager.InitLuaEnv();
 
         // 3. 执行 Lua 入口
         luaManager.StartLua();
     }
 
-    /// <summary>
-    /// 跳转到游戏场景
-    /// 热更新完成后，启动游戏主逻辑
-    /// </summary>
     private void GameLanuch()
     {
         Addressables.InstantiateAsync("SoundAudioPool");
@@ -328,12 +315,6 @@ public class HotUpdateSystem : MonoBehaviour
         {
             // 先转换为 Component获取 GameObject，然后释放 Addressables资源
             Addressables.Release(((Component)_hotUpdateWindow).gameObject);
-        }
-
-        // 释放DLL配置资源
-        if (_dllConfig != null)
-        {
-            Addressables.Release(_dllConfig);
         }
 
         // 加载游戏主场景

@@ -176,20 +176,14 @@ public class LuaBinding : IDisposable
     public void InvokeLua(string method, params object[] args)
     {
         LuaFunction fn = GetLuaFunction(method);
-        if (fn == null) return;
-        fn.Call(BuildCallArgs(LuaInstance, args));
+        fn?.Call(BuildCallArgs(LuaInstance, args));
     }
 
     private LuaFunction GetLuaFunction(string method)
     {
         if (_luaFuncCache.TryGetValue(method, out LuaFunction cached)) return cached;
-
-        LuaFunction fn = LuaInstance != null ? LuaInstance.Get<LuaFunction>(method) : null;
-
-        // 只在实例已绑定后才缓存（无论有没有这个方法）：
-        // 实例还没绑定时缓存 null 会让这个方法永久失效，之后实例就绪也再取不到。
+        LuaFunction fn = LuaInstance?.Get<LuaFunction>(method);
         if (LuaInstance != null) _luaFuncCache[method] = fn;
-
         return fn;
     }
 

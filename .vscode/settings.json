@@ -1,0 +1,59 @@
+{
+  // ────────────────────────────────────────────────────────────────
+  //  让 VSCode 把 Assets/LuaScripts 下的 .lua.txt 按 Lua 解析
+  //
+  //  为什么后缀必须是 .lua.txt：
+  //    Unity 只把固定扩展名（.txt/.json/.bytes/.xml/.csv...）识别为 TextAsset，
+  //    .lua 不在列表里，所以 Lua 源码必须带 .txt 后缀。
+  //    这里做「文件关联」，不影响 Unity，只让编辑器按 Lua 显示。
+  //
+  //  配套：安装扩展 sumneko.lua（Lua Language Server）→ 高亮 + 补全 + 诊断
+  // ────────────────────────────────────────────────────────────────
+
+  "files.associations": {
+    "*.lua.txt": "lua"
+  },
+
+  // Unity 生成的目录，看代码时没必要出现在资源管理器里
+  "files.exclude": {
+    "**/*.meta": true,
+    "Library/": true,
+    "Temp/": true,
+    "obj/": true,
+    "Logs/": true,
+    "Builds/": true,
+    "ServerData/": true,
+    "UserSettings/": true
+  },
+
+  // 全局搜索也跳过这些目录（否则搜一次要等很久）
+  "search.exclude": {
+    "Library/": true,
+    "Temp/": true,
+    "obj/": true,
+    "Logs/": true,
+    "Builds/": true,
+    "ServerData/": true,
+    "**/*.meta": true
+  },
+
+  "[lua]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false
+  },
+
+  // xLua 注入到 Lua 环境的全局符号，避免被报「未定义变量」
+  "Lua.diagnostics.globals": [
+    "CS",
+    "typeof",
+    "xlua",
+    "import_type",
+    "rawget",
+    "rawset",
+    "unpack"
+  ],
+
+  // 不做第三方库扫描（本项目 Lua 靠 require 按名字找，不是标准 package 结构）
+  "Lua.workspace.checkThirdParty": false
+}
